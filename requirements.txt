@@ -1,0 +1,13 @@
+# Python 3.12; run from 1_rebot_control_joycon:
+# python -m pip install -r requirements.txt
+# Base runtime for keyboard control; excludes Learning_Model and AHand_Plus_SDK.
+# Joy-Con control additionally needs: python -m pip install -e ./joycon-robotics
+# Match Learning_Model/lerobot's NumPy range so both use the root .venv.
+numpy>=2.0.0,<2.3.0
+scipy==1.17.1
+mujoco==3.16.0
+roboticstoolbox-python==1.4.4
+spatialmath-python==1.1.18
+pyserial==3.5
+pynput==1.8.2
+

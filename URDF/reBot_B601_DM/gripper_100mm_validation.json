@@ -1,0 +1,141 @@
+{
+  "source": "夹爪-100mm.STL",
+  "sha256": "8593d2ecf2803f4cf519d30a259515ea812ef4479126efef2590f866c5b4aef5",
+  "source_bounds": [
+    [
+      0.0,
+      0.0,
+      0.0
+    ],
+    [
+      32.0,
+      99.0,
+      40.0
+    ]
+  ],
+  "source_unit_assumption": "mm",
+  "alignment": "source Y=0 aligned to existing finger mounting X=-0.06480932235717773 m; source X=0 is closing plane; source Z=20 mm is centre",
+  "fingers": {
+    "left": {
+      "transform": [
+        [
+          0.0,
+          0.001,
+          0.0,
+          -0.06480932235717773
+        ],
+        [
+          0.001,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          -0.001,
+          0.02
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "bounds_m": [
+        [
+          -0.06480932235717773,
+          0.0,
+          -0.02
+        ],
+        [
+          0.03419067764282227,
+          0.032,
+          0.02
+        ]
+      ],
+      "visual_mesh": "finger_left_100mm.stl"
+    },
+    "right": {
+      "transform": [
+        [
+          0.0,
+          0.001,
+          0.0,
+          -0.06480932235717773
+        ],
+        [
+          -0.001,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0,
+          -0.001,
+          0.02
+        ],
+        [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "bounds_m": [
+        [
+          -0.06480932235717773,
+          -0.032,
+          -0.02
+        ],
+        [
+          0.03419067764282227,
+          0.0,
+          0.02
+        ]
+      ],
+      "visual_mesh": "finger_right_100mm.stl"
+    }
+  },
+  "validation": {
+    "mujoco": "3.16.0",
+    "models": {
+      "reBot_B601_DM.xml": {
+        "actuators": 8,
+        "steps": 6000,
+        "warnings": 0,
+        "final_qpos": [
+          0.2000000000000035,
+          -0.2928250763679685,
+          -0.2247395301210654,
+          0.2209721195110997,
+          0.19953812405443433,
+          0.19999771981227407,
+          0.0498014137845178,
+          -0.050037466471734085
+        ]
+      },
+      "scene.xml": {
+        "actuators": 8,
+        "steps": 6000,
+        "warnings": 0,
+        "final_qpos": [
+          0.2000000000000035,
+          -0.2928250763679685,
+          -0.2247395301210654,
+          0.2209721195110997,
+          0.19953812405443433,
+          0.19999771981227407,
+          0.0498014137845178,
+          -0.050037466471734085
+        ]
+      }
+    },
+    "urdf_mesh_references": 44,
+    "urdf_all_meshes_exist": true,
+    "inertial_parameters": "unchanged; new finger mass not measured",
+    "collision": "three longitudinal convex hulls per finger in MJCF; approximate"
+  }
+}

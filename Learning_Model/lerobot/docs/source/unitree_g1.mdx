@@ -1,0 +1,406 @@
+# Unitree G1
+
+<img
+  src="https://huggingface.co/datasets/huggingface/documentation-images/resolve/main/lerobot/unitree_thumbnail.jpg"
+  alt="Unitree G1 locomanipulation demo"
+  style={{ width: "100%" }}
+/>
+
+The Unitree G1 humanoid is now supported in LeRobot! You can teleoperate, train locomanipulation policies, test in sim, and more. Both 29 and 23 DoF variants are supported.
+
+---
+
+## Part 1: Getting Started
+
+### Install the Unitree SDK
+
+Follow the [unitree_sdk2_python installation guide](https://github.com/unitreerobotics/unitree_sdk2_python#installation). Tested with `unitree_sdk2py==1.0.1` and `cyclonedds==0.10.2`:
+
+```bash
+conda create -y -n lerobot python=3.12
+conda activate lerobot
+git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
+cd unitree_sdk2_python
+pip install -e .
+cd ..
+```
+
+### Install LeRobot
+
+```bash
+conda install ffmpeg -c conda-forge
+conda install -c conda-forge "pinocchio>=3.0.0,<4.0.0"
+git clone https://github.com/huggingface/lerobot.git
+cd lerobot
+pip install -e '.[unitree_g1]'
+```
+
+<Tip>
+  For now, pinocchio must be installed from conda-forge (not pip) to include the
+  CasADi bindings needed for arm IK.
+</Tip>
+
+### Test the Installation (Simulation)
+
+The simulation environment has its own dependencies. Check the Simulation environment dependencies: [Unitree G1 Mujoco EnvHub](https://huggingface.co/lerobot/unitree-g1-mujoco/tree/main).
+
+```bash
+pip install mujoco loguru msgpack msgpack-numpy
+```
+
+```bash
+lerobot-teleoperate \
+  --robot.type=unitree_g1 \
+  --robot.is_simulation=true \
+  --teleop.type=unitree_g1 \
+  --teleop.id=wbc_unitree \
+  --robot.cameras='{"global_view": {"type": "zmq", "server_address": "localhost", "port": 5555, "camera_name": "head_camera", "width": 640, "height": 480, "fps": 30, "warmup_s": 5}}' \
+  --display_data=true \
+  --robot.controller=GrootLocomotionController
+```
+
+This will launch a [MuJoCo sim instance](https://huggingface.co/lerobot/unitree-g1-mujoco/tree/main) for the G1. You can connect a gamepad to your machine before launching in order to control the robot's locomotion in sim. We support both [HolosomaLocomotionController](https://github.com/amazon-far/holosoma) and [GrootLocomotionController](https://github.com/NVlabs/GR00T-WholeBodyControl) via `--robot.controller`.
+
+- Press `9` to release the robot
+- Press `7` / `8` to increase / decrease waist height
+
+#### Choosing the End Effector
+
+`--robot.end_effector` says what the arms carry: `dex1` for the parallel grippers (the default), `dex3` for the three-finger hands, or `dummy` for bare wrists. In simulation it picks the MuJoCo model, which decides the finger actuators and which cameras the scene carries — the wrist cameras are mounted on the end effector, so `dummy` only has `head_camera`.
+
+```bash
+lerobot-teleoperate \
+  --robot.type=unitree_g1 \
+  --robot.is_simulation=true \
+  --robot.end_effector=dex3 \
+  --teleop.id=wbc_unitree \
+  --robot.controller=GrootLocomotionController
+```
+
+The sim publishes the model's cameras over ZMQ on `--robot.sim_camera_port` (5555 by default), which is where the `zmq` cameras in `--robot.cameras` read them from. Pass `--robot.sim_publish_images=false` to open MuJoCo's interactive window instead: the sim renders either its cameras or its window, never both, since the offscreen contexts belong to the thread that creates them rather than to the viewer's. `--robot.sim_onscreen` names that choice outright rather than leaving it to the cameras, and asking for both is refused; set it and `--robot.sim_publish_images` both false to render neither, which is what a machine with no display can do.
+
+### Connect to the Physical Robot
+
+The G1's Ethernet IP is fixed at `192.168.123.164`. Your machine must have a static IP on the same subnet: `192.168.123.x` where `x ≠ 164`.
+
+```bash
+# Replace 'enp131s0' with your ethernet interface name (check with `ip a`)
+sudo ip addr flush dev enp131s0
+sudo ip addr add 192.168.123.200/24 dev enp131s0
+sudo ip link set enp131s0 up
+```
+
+### SSH into the Robot
+
+```bash
+ssh unitree@192.168.123.164
+# Password: 123
+```
+
+### Share Internet via Ethernet
+
+The G1 needs internet access to clone repos and install packages. Share your laptop's connection over Ethernet:
+
+**On your laptop:**
+
+```bash
+sudo sysctl -w net.ipv4.ip_forward=1
+
+# Replace wlp132s0f0 with your WiFi interface name
+sudo iptables -t nat -A POSTROUTING -o wlp132s0f0 -s 192.168.123.0/24 -j MASQUERADE
+sudo iptables -A FORWARD -i wlp132s0f0 -o enp131s0 -m state --state RELATED,ESTABLISHED -j ACCEPT
+sudo iptables -A FORWARD -i enp131s0 -o wlp132s0f0 -j ACCEPT
+```
+
+**On the G1:**
+
+```bash
+sudo ip route del default 2>/dev/null || true
+sudo ip route add default via 192.168.123.200 dev eth0
+echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
+
+# Verify
+ping -c 3 8.8.8.8
+```
+
+### Install the Unitree SDK on the G1
+
+Follow the [unitree_sdk2_python installation guide](https://github.com/unitreerobotics/unitree_sdk2_python#installation):
+
+```bash
+conda create -y -n lerobot python=3.12
+conda activate lerobot
+git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
+cd unitree_sdk2_python
+python -m pip install -e .
+cd ..
+```
+
+### Install LeRobot on the G1
+
+```bash
+git clone https://github.com/huggingface/lerobot.git
+cd lerobot
+conda install -c conda-forge "pinocchio>=3.0.0,<4.0.0"
+python -m pip install -e '.[unitree_g1]'
+```
+
+<Tip>
+  For now, pinocchio must be installed from conda-forge (not pip) to include the
+  CasADi bindings needed for arm IK.
+</Tip>
+
+### (Optional) Enable WiFi on the Robot
+
+For wireless SSH access, you can enable WiFi on the G1 (it's blocked by default):
+
+```bash
+sudo rfkill unblock all
+sudo ip link set wlan0 up
+sudo nmcli radio wifi on
+sudo nmcli device set wlan0 managed yes
+sudo systemctl restart NetworkManager
+```
+
+**Connect to a WiFi network:**
+
+```bash
+nmcli device wifi list
+
+sudo nmcli connection add type wifi ifname wlan0 con-name "YourNetwork" ssid "YourNetwork"
+sudo nmcli connection modify "YourNetwork" wifi-sec.key-mgmt wpa-psk
+sudo nmcli connection modify "YourNetwork" wifi-sec.psk "YourPassword"
+sudo nmcli connection modify "YourNetwork" connection.autoconnect yes
+sudo nmcli connection up "YourNetwork"
+
+ip a show wlan0
+```
+
+You can then SSH over WiFi instead of Ethernet:
+
+```bash
+ssh unitree@<ROBOT_WIFI_IP>
+# Password: 123
+```
+
+---
+
+## Part 2: Teleoperation & Locomotion
+
+### Run the Robot Server
+
+On the robot (from `~/lerobot`):
+
+```bash
+cd ~/lerobot
+python src/lerobot/robots/unitree_g1/run_g1_server.py --camera
+```
+
+### Run the Locomotion Policy
+
+You can run the teleoperation client from your laptop over Ethernet, over WiFi (experimental), or directly on the robot itself. Mind potential latency introduced by your network.
+
+**From your laptop:**
+
+```bash
+lerobot-teleoperate \
+  --robot.type=unitree_g1 \
+  --robot.is_simulation=false \
+  --robot.robot_ip=<ROBOT_IP> \
+  --teleop.type=unitree_g1 \
+  --teleop.id=wbc_unitree \
+  --robot.cameras='{"global_view": {"type": "zmq", "server_address": "<ROBOT_IP>", "port": 5555, "camera_name": "head_camera", "width": 640, "height": 480, "fps": 30}}' \
+  --display_data=true \
+  --robot.controller=HolosomaLocomotionController
+```
+
+We support both [GrootLocomotionController](https://github.com/NVlabs/GR00T-WholeBodyControl) and [HolosomaLocomotionController](https://github.com/amazon-far/holosoma) via `--robot.controller`.
+
+---
+
+## Part 3: Loco-Manipulation with the Homunculus Exoskeleton
+
+We provide a loco-manipulation solution via the Homunculus Exoskeleton — an open-source 7 DoF exoskeleton for whole-body control. Check it out [here](https://github.com/nepyope/hmc_exo).
+
+### Calibrate
+
+```bash
+lerobot-calibrate \
+  --teleop.type=unitree_g1 \
+  --teleop.left_arm_config.port=/dev/ttyACM1 \
+  --teleop.right_arm_config.port=/dev/ttyACM0 \
+  --teleop.id=exo
+```
+
+During calibration move each joint through its entire range. After fitting, move the joint in a neutral position and press `n` to advance.
+
+### Record a Dataset
+
+```bash
+lerobot-record \
+  --robot.type=unitree_g1 \
+  --robot.is_simulation=true \
+  --robot.cameras='{"global_view": {"type": "zmq", "server_address": "localhost", "port": 5555, "camera_name": "head_camera", "width": 640, "height": 480, "fps": 30}}' \
+  --teleop.type=unitree_g1 \
+  --teleop.left_arm_config.port=/dev/ttyACM1 \
+  --teleop.right_arm_config.port=/dev/ttyACM0 \
+  --teleop.id=exo \
+  --dataset.repo_id=your-username/dataset-name \
+  --dataset.single_task="Test" \
+  --dataset.num_episodes=2 \
+  --dataset.episode_time_s=5 \
+  --dataset.reset_time_s=5 \
+  --dataset.push_to_hub=true \
+  --dataset.streaming_encoding=true \
+  --dataset.encoder_threads=2
+```
+
+> **Note:** Omit `--teleop.left_arm_config.port` and `--teleop.right_arm_config.port` if you're only using the joystick.
+
+Example dataset: [nepyope/unitree_box_move_blue_full](https://huggingface.co/datasets/nepyope/unitree_box_move_blue_full)
+
+---
+
+## Part 4: Training & Inference
+
+### Train
+
+```bash
+python src/lerobot/scripts/lerobot_train.py \
+  --dataset.repo_id=your-username/dataset-name  \
+  --policy.type=pi05 \
+  --output_dir=./outputs/pi05_training \
+  --job_name=pi05_training \
+  --policy.repo_id=your-username/your-repo-id \
+  --policy.pretrained_path=lerobot/pi05_base \
+  --policy.compile_model=true \
+  --policy.gradient_checkpointing=true \
+  --wandb.enable=true \
+  --policy.dtype=bfloat16 \
+  --policy.freeze_vision_encoder=false \
+  --policy.train_expert_only=false \
+  --steps=3000 \
+  --policy.device=cuda \
+  --batch_size=32
+```
+
+### Inference with RTC
+
+A compatible trained policy can use local inference-time RTC:
+
+```bash
+lerobot-rollout \
+  --strategy.type=base \
+  --policy.path=your-username/your-repo-id \
+  --policy.device=cuda \
+  --robot.type=unitree_g1 \
+  --robot.is_simulation=false \
+  --robot.controller=HolosomaLocomotionController \
+  --robot.cameras='{"global_view": {"type": "zmq", "server_address": "<ROBOT_IP>", "port": 5555, "camera_name": "head_camera", "width": 640, "height": 480, "fps": 30}}' \
+  --task="task_description" \
+  --duration=1000 \
+  --fps=30 \
+  --inference.type=rtc
+```
+
+G1 locomotion controllers do not declare the retained-target contract used by rollout's
+recoverable waiting. After motion begins, exhausting their action buffer therefore causes
+a terminal fault rather than a grace-period wait. Request deadlines and observation-age
+limits also apply. Validate that the policy's usable chunk covers inference latency before
+using this recipe; see [local RTC waiting and budgets](./inference#inference-backends).
+SONIC has a separate retained-token contract described below.
+
+---
+
+## Part 5: SONIC Whole-Body Control (Latent-Token Policies)
+
+LeRobot now ports the **decoder** half of NVIDIA's [SONIC](https://nvlabs.github.io/GEAR-SONIC/) whole-body deploy stack as the `SonicWholeBodyController`. Instead of commanding joints, the policy outputs a 64-D **latent motion token** (`motion_token.{i}.pos`) each tick; the SONIC decoder maps that token plus recent proprioception history onto a residual action that is scaled and added to the standing pose, producing 50 Hz joint-position targets for all 29 DoF.
+
+The controller loads its ONNX decoder and all deploy constants (PD gains, `default_angles`, `action_scale`, and the neutral token) from [`lerobot/sonic_decoder`](https://huggingface.co/lerobot/sonic_decoder). The repo also ships a distilled low-latency decoder, selectable with the controller's `policy_type="low_latency"` argument (defaults to `"default"`).
+
+### Test in Simulation
+
+Any token-output policy trained on SONIC motion tokens (e.g. [`nepyope/sonic_walk`](https://huggingface.co/nepyope/sonic_walk)) can drive it:
+
+```bash
+lerobot-rollout \
+  --strategy.type=base \
+  --policy.path=nepyope/sonic_walk \
+  --policy.device=cuda \
+  --robot.type=unitree_g1 \
+  --robot.is_simulation=true \
+  --robot.controller=SonicWholeBodyController \
+  --robot.cameras='{"ego_view": {"type": "zmq", "server_address": "localhost", "port": 5555, "camera_name": "head_camera", "width": 640, "height": 480, "fps": 30, "warmup_s": 15}}'
+```
+
+### Run on the Physical Robot
+
+Run the [remote inference](./remote_inference) policy server on the GPU machine and keep the robot bridge, SONIC decoder and rollout client on the G1 Jetson. Only 64-D token chunks cross the network; the decoder and 50 Hz `rt/lowcmd` loop remain onboard.
+
+Install the remote extra on both machines. Keep the Unitree extra on the G1:
+
+```bash
+# GPU machine
+python -m pip install -e '.[remote]'
+
+# G1 Jetson
+python -m pip install -e '.[unitree_g1,remote]'
+```
+
+On the GPU machine, start the policy server from the repository root. The maintained profile matches `nepyope/sonic_walk`; copy and update its checkpoint and feature contract together for another policy.
+
+```bash
+lerobot-policy-server \
+  --config_path=examples/remote_inference/unitree_g1_sonic.yaml
+```
+
+On the G1, keep the bridge and camera running:
+
+```bash
+python src/lerobot/robots/unitree_g1/run_g1_server.py --camera
+```
+
+Then start the rollout client in a second G1 terminal, replacing `<GPU_MACHINE_IP>`:
+
+```bash
+lerobot-rollout \
+  --strategy.type=base \
+  --inference.type=remote \
+  --inference.endpoint=tcp/<GPU_MACHINE_IP>:7447 \
+  --inference.deployment=g1-sonic \
+  --inference.semantics=unitree-g1-sonic-motion-token-v1 \
+  --inference.encoding=jpeg \
+  --inference.action_starvation_grace_s=1.0 \
+  --robot.type=unitree_g1 \
+  --robot.is_simulation=false \
+  --robot.robot_ip=127.0.0.1 \
+  --robot.controller=SonicWholeBodyController \
+  --robot.cameras='{"ego_view": {"type": "zmq", "server_address": "127.0.0.1", "port": 5555, "camera_name": "head_camera", "width": 640, "height": 480, "fps": 30, "warmup_s": 5}}' \
+  --task='walk forward' \
+  --fps=30 \
+  --return_to_initial_position=false \
+  --interactive=true
+```
+
+Type `/start` only after the G1 is clear to move. SONIC declares waiting support because re-sending the last complete token keeps the onboard decoder balancing. Before the first policy result, rollout sends the decoder's neutral token. If the action buffer runs dry, it repeats the last applied token for at most `action_starvation_grace_s` (one second above); if no fresh prediction arrives, rollout faults and follows its configured shutdown/disconnect path. G1 locomotion controllers remain unsupported because their joystick velocities cannot be retained this way.
+
+The recipe disables return-to-initial-position: interpolating through SONIC's latent-token space is
+not a validated physical homing trajectory. Avoid `/reset` for the same reason, since it would sweep
+the token back to its connect-time value. `/stop` still closes the remote session and disconnects
+the robot through the normal controller shutdown path.
+
+With `SonicWholeBodyController`, the observation state is the 64-D token echo rather than the 29 joint positions, so a compatible checkpoint must be trained against that state. On connect, the robot eases joints to the decoder's `default_angles` before the controller takes over.
+
+---
+
+## Additional Resources
+
+- [Unitree SDK Documentation](https://github.com/unitreerobotics/unitree_sdk2_python)
+- [GR00T-WholeBodyControl](https://github.com/NVlabs/GR00T-WholeBodyControl)
+- [Holosoma](https://github.com/amazon-far/holosoma)
+- [LeRobot Documentation](https://github.com/huggingface/lerobot)
+- [Unitree IL LeRobot](https://github.com/unitreerobotics/unitree_IL_lerobot)
+
+---
+
+_Last updated: July 2026_

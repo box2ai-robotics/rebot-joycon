@@ -1,0 +1,77 @@
+# Python environments, caches and packaging
+.venv/
+.venv-*/
+.venv.*/
+venv/
+venv-*/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyd
+*.so
+*.egg
+*.whl
+*.egg-info/
+.Python
+.eggs/
+build/
+dist/
+pip-wheel-metadata/
+.pybuild/
+.tox/
+.nox/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.hypothesis/
+.ipynb_checkpoints/
+.coverage
+.coverage.*
+coverage.xml
+coverage.json
+*.cover
+*.py,cover
+htmlcov/
+
+# Local settings and secrets
+.env
+.env.*
+!.env.example
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
+
+# Runtime logs stay on disk; do not publish them
+logs/
+log/
+*.log
+*.log.*
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Datasets, training outputs and downloaded model weights
+/Learning_Model/lerobot/data/
+/Learning_Model/lerobot/outputs/
+/Learning_Model/lerobot/tests/outputs/
+wandb/
+*.safetensors
+*.pt
+*.pth
+*.ckpt
+# Upstream regression fixtures are source-controlled test data, not training output.
+!/Learning_Model/lerobot/tests/artifacts/**/*.safetensors
+
+# External upstream dependency; clone as described in README.md
+/joycon-robotics/
+
+# Keep examples/calibration/*.json, URDF assets, and documentation images.
+# Do not blanket-ignore JSON/JSONL: only runtime log directories are excluded.
+# Learning_Model/lerobot contains project adaptations: do not ignore its source.

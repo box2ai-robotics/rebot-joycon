@@ -1,0 +1,8 @@
+{
+  "mujoco_version": "3.16.0",
+  "robot_nq": 8,
+  "scene_nq": 29,
+  "urdf_mesh_references": 44,
+  "relocated_load": true,
+  "scene_10_steps_max_body_position_difference": 0.0
+}

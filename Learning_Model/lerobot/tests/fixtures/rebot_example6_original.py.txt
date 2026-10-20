@@ -1,0 +1,175 @@
+# code by Boxjod 2025.12.01 Box2AI-Robotics copyright 盒桥智能 版权所有
+
+import os
+import json
+from pathlib import Path
+from importlib import import_module
+ReBotCalibration = import_module("0_calibrate_rebot").ReBotCalibration
+import mujoco
+import mujoco.viewer
+import numpy as np
+import time
+import copy
+
+from ReBot_Kinematics import rebot_IK, rebot_FK, get_robot, get_home_q
+from joyconrobotics import JoyconRobotics
+from ReBot_SDK import ReBot
+
+np.set_printoptions(linewidth=200)
+
+# Set the MuJoCo render backend
+os.environ["MUJOCO_GL"] = "egl"
+
+# Define joint names
+JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
+
+# Absolute path of the XML model
+xml_path = str(Path(__file__).resolve().parents[1] / "URDF/reBot_B601_DM/scene.xml")
+mjmodel = mujoco.MjModel.from_xml_path(xml_path)
+qpos_indices = np.array([mjmodel.jnt_qposadr[mjmodel.joint(name).id] for name in JOINT_NAMES])
+mjdata = mujoco.MjData(mjmodel)
+finger_indices = [mjmodel.joint(name).qposadr[0] for name in ("finger_left", "finger_right")]
+# 第七路保持夹爪电机角度；仿真时按标定端点映射为双指位移。
+calibration = ReBotCalibration()
+gripper_open = calibration.gripper_open
+gripper_close = calibration.gripper_close
+
+# Define joint control increment (in radians)
+JOINT_INCREMENT = 0.01  # Can be adju`sted as needed
+POSITION_INSERMENT = 0.0008
+
+# create robot
+robot = get_robot('rebot_b601_dm')
+
+# Define joint limits
+control_qlimit = calibration.control_limits(robot.qlim)
+
+control_glimit = [[0.000, -0.450,  -0.00, -3.1, -3.1, -3.1], 
+                  [0.450,  0.450,  0.680,  3.1,  3.1,  3.1]]
+
+# Initialize target joint positions
+init_qpos = np.r_[get_home_q(robot), gripper_close]
+target_qpos = init_qpos.copy()  # Copy of initial joint positions
+init_gpos = rebot_FK(init_qpos[:6], robot=robot)
+# 窗口与 IK 种子从同一初始位姿开始；夹爪保持闭合。
+mjdata.qpos[qpos_indices] = init_qpos[:6]
+mjdata.qpos[finger_indices] = 0.0
+mjdata.ctrl[:] = np.r_[init_qpos[:6], 0.0]
+mujoco.mj_forward(mjmodel, mjdata)
+# print(f'{init_gpos=}')
+target_gpos = init_gpos.copy()
+
+# Backup for target_gpos in case of invalid IK
+target_gpos_last = init_gpos.copy()
+target_qpos_last = init_qpos.copy()
+
+# Joycon
+direction_data_r = [[], [], []]  
+offset_position_m = init_gpos[0:3]
+joyconrobotics_right = JoyconRobotics(device="right", 
+                                      glimit = control_glimit,
+                                      dof_speed = [2 / 3, 2 / 3, 2 / 3, 1, 1, 1],
+                                      offset_position_m=offset_position_m, 
+                                    #   pitch_down_double = True,
+                                      gripper_close = gripper_close,
+                                      gripper_open = gripper_open,
+                                      gripper_state = gripper_close,
+                                      )
+
+# auto ckeck the ttyACM
+output1 = os.popen('udevadm info -a -n /dev/ttyACM0 | grep serial').read()
+output2 = os.popen('udevadm info -a -n /dev/ttyACM1 | grep serial').read()
+
+if "0000000" in output1:
+    arm_tty = "/dev/ttyACM0"
+elif "0000000" in output2:
+    arm_tty = "/dev/ttyACM1"
+else:
+    print("找不到ReBot机械臂驱动器，请重新拔插检查电源后重试")
+
+# init ReBot Real Hardware
+rebot_right = ReBot(driver_port=arm_tty, arm_type="rebot_b601_dm", side = "right")
+# SDK 启动/退出回中与 Joy-Con 初始目标一致。
+rebot_right.home_pose = init_qpos.copy()
+# rebot_right.if_print = True
+rebot_right.Go_Home_Pose()
+
+t = 0
+try:
+    # Launch the MuJoCo viewer
+    with mujoco.viewer.launch_passive(mjmodel, mjdata) as viewer:
+        viewer.cam.azimuth = 45    # 水平角度
+        viewer.cam.elevation = -30  # 垂直角度
+        viewer.cam.distance = 1.0   # 观察距离
+        viewer.cam.lookat = [-0.1, 0.2, 0.3]  # 观察点坐标
+    
+        start = time.time()
+        while viewer.is_running() and time.time() - start < 1000:
+            step_start = time.time()
+
+            if t ==0 :
+                mjdata.qpos[qpos_indices] = init_qpos[:6]
+                finger_opening = np.clip((init_qpos[6] - gripper_close) / (gripper_open - gripper_close), 0.0, 1.0) * mjmodel.joint("finger_left").range[1]
+                mjdata.qpos[finger_indices] = [finger_opening, -finger_opening]
+                mjdata.ctrl[:] = np.r_[init_qpos[:6], finger_opening]
+                mujoco.mj_step(mjmodel, mjdata)
+                with viewer.lock():
+                    viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = int(mjdata.time % 2)
+                viewer.sync()
+                
+            t = t + 1
+            target_gpos, gripper_state_r, _ = joyconrobotics_right.get_control()# update()
+            target_qpos[6] = np.clip(gripper_state_r, control_qlimit[0][6], control_qlimit[1][6])
+            target_gpos[4] = -target_gpos[4]         
+            target_gpos[3] = -target_gpos[3]   
+                 
+            # print("target_gpos:", [f"{x:.3f}" for x in target_gpos])
+            fd_qpos = np.clip(mjdata.qpos[qpos_indices], robot.qlim[0], robot.qlim[1])
+            qpos_inv, ik_success = rebot_IK(fd_qpos, target_gpos, robot=robot)
+            
+            if ik_success:  # Check if the inverse kinematics solution is valid
+                target_qpos[:6] = qpos_inv
+                # Step the simulation
+                for idx in range(7):
+                    if target_qpos[idx] < control_qlimit[0][idx]:
+                        target_qpos[idx] = control_qlimit[0][idx]
+                    elif target_qpos[idx] > control_qlimit[1][idx]:
+                        target_qpos[idx] = control_qlimit[1][idx]
+                        
+                for idx in range(2):
+
+                    mjdata.qpos[qpos_indices] = target_qpos[:6]
+                    finger_opening = np.clip((target_qpos[6] - gripper_close) / (gripper_open - gripper_close), 0.0, 1.0) * mjmodel.joint("finger_left").range[1]
+                    mjdata.qpos[finger_indices] = [finger_opening, -finger_opening]
+                    mjdata.ctrl[:] = np.r_[target_qpos[:6], finger_opening]
+                    mujoco.mj_step(mjmodel, mjdata)
+
+                    # Update viewer options (e.g., toggle contact point display every second)
+                    with viewer.lock():
+                        viewer.opt.flags[mujoco.mjtVisFlag.mjVIS_CONTACTPOINT] = int(mjdata.time % 2)
+                    viewer.sync()
+                
+                # Run the Real Robot Arm
+                if t<40:
+                    rebot_right.Go_Home_Pose()
+                elif t > 40:
+                    rebot_right.ReBot_Control(target_qpos)
+                    
+                target_qpos_last = target_qpos.copy()  # Backup the valid target_qpos
+                
+            else:
+                target_qpos = target_qpos_last.copy()  # Revert to the last valid position if IK fails
+            
+            # Time management to maintain simulation timestep
+
+            time_until_next_step = 0.001 - (time.time() - step_start)
+            if time_until_next_step > 0:
+                time.sleep(time_until_next_step)
+
+except KeyboardInterrupt:
+    print("User interrupted the simulation.")
+finally:
+    for idx in range(100):
+        rebot_right.Go_Home_Pose()
+    rebot_right.ReBot_Disable()
+    viewer.close()

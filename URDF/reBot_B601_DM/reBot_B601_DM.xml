@@ -1,0 +1,181 @@
+<mujoco model="reBot_B601_DM">
+  <compiler angle="radian" coordinate="local" eulerseq="xyz" meshdir="meshes" />
+  <option timestep="0.001" gravity="0 0 -9.81" iterations="100" noslip_iterations="20" />
+  <asset>
+    <mesh name="base_link_hardware_black_mesh" file="colored_base_link_hardware_black.stl" />
+    <mesh name="base_link_matte_black_mesh" file="colored_base_link_matte_black.stl" />
+    <mesh name="base_link_silver_trim_mesh" file="colored_base_link_silver_trim.stl" />
+    <mesh name="link1_anodized_grey_mesh" file="colored_link1_anodized_grey.stl" />
+    <mesh name="link1_hardware_black_mesh" file="colored_link1_hardware_black.stl" />
+    <mesh name="link1_matte_black_mesh" file="colored_link1_matte_black.stl" />
+    <mesh name="link2_anodized_grey_mesh" file="colored_link2_anodized_grey.stl" />
+    <mesh name="link2_hardware_black_mesh" file="colored_link2_hardware_black.stl" />
+    <mesh name="link2_matte_black_mesh" file="colored_link2_matte_black.stl" />
+    <mesh name="link2_seeed_yellow_mesh" file="colored_link2_seeed_yellow.stl" />
+    <mesh name="link3_anodized_grey_mesh" file="colored_link3_anodized_grey.stl" />
+    <mesh name="link3_hardware_black_mesh" file="colored_link3_hardware_black.stl" />
+    <mesh name="link3_matte_black_mesh" file="colored_link3_matte_black.stl" />
+    <mesh name="link3_seeed_yellow_mesh" file="colored_link3_seeed_yellow.stl" />
+    <mesh name="link4_anodized_grey_mesh" file="colored_link4_anodized_grey.stl" />
+    <mesh name="link4_hardware_black_mesh" file="colored_link4_hardware_black.stl" />
+    <mesh name="link4_matte_black_mesh" file="colored_link4_matte_black.stl" />
+    <mesh name="link4_seeed_yellow_mesh" file="colored_link4_seeed_yellow.stl" />
+    <mesh name="link5_anodized_grey_mesh" file="colored_link5_anodized_grey.stl" />
+    <mesh name="link5_hardware_black_mesh" file="colored_link5_hardware_black.stl" />
+    <mesh name="link5_matte_black_mesh" file="colored_link5_matte_black.stl" />
+    <mesh name="link6_hardware_black_mesh" file="colored_link6_hardware_black.stl" />
+    <mesh name="link6_matte_black_mesh" file="colored_link6_matte_black.stl" />
+    <mesh name="gripper_base_hardware_black_mesh" file="colored_gripper_base_hardware_black.stl" />
+    <mesh name="gripper_base_metal_mesh" file="colored_gripper_base_metal.stl" />
+    <mesh name="gripper_base_seeed_yellow_mesh" file="colored_gripper_base_seeed_yellow.stl" />
+    <mesh name="finger_left_body_mesh" file="finger_left_100mm.stl" />
+    <mesh name="finger_left_carriage_mesh" file="colored_left_finger_carriage_grey.stl" />
+    <mesh name="finger_left_travel_stop_mesh" file="colored_left_finger_travel_stop_yellow.stl" />
+    <mesh name="finger_left_crossed_rack_mesh" file="colored_left_finger_rack_metal.stl" />
+    <mesh name="finger_right_body_mesh" file="finger_right_100mm.stl" />
+    <mesh name="finger_right_carriage_mesh" file="colored_right_finger_carriage_grey.stl" />
+    <mesh name="finger_right_travel_stop_mesh" file="colored_right_finger_travel_stop_yellow.stl" />
+    <mesh name="finger_right_crossed_rack_mesh" file="colored_right_finger_rack_metal.stl" />
+    <mesh name="gripper_base_collision_mesh" file="gripper_base.stl" />
+    <mesh name="finger_left_body_collision_mesh" file="finger_left_100mm.stl" />
+    <mesh name="finger_left_carriage_collision_mesh" file="colored_left_finger_carriage_grey.stl" />
+    <mesh name="finger_left_travel_stop_collision_mesh" file="colored_left_finger_travel_stop_yellow.stl" />
+    <mesh name="finger_right_body_collision_mesh" file="finger_right_100mm.stl" />
+    <mesh name="finger_right_carriage_collision_mesh" file="colored_right_finger_carriage_grey.stl" />
+    <mesh name="finger_right_travel_stop_collision_mesh" file="colored_right_finger_travel_stop_yellow.stl" />
+    <mesh name="finger_left_front_collision_mesh" file="finger_left_100mm_front_collision.stl" />
+    <mesh name="finger_left_mid_collision_mesh" file="finger_left_100mm_mid_collision.stl" />
+    <mesh name="finger_left_rear_collision_mesh" file="finger_left_100mm_rear_collision.stl" />
+    <mesh name="finger_right_front_collision_mesh" file="finger_right_100mm_front_collision.stl" />
+    <mesh name="finger_right_mid_collision_mesh" file="finger_right_100mm_mid_collision.stl" />
+    <mesh name="finger_right_rear_collision_mesh" file="finger_right_100mm_rear_collision.stl" />
+    <material name="anodized_grey_mat" specular="0.72" shininess="0.90" metallic="0.88" roughness="0.18" />
+    <material name="hardware_black_mat" specular="0.50" shininess="0.72" metallic="0.82" roughness="0.20" />
+    <material name="matte_black_mat" specular="0.42" shininess="0.48" metallic="0.48" roughness="0.48" />
+    <material name="seeed_yellow_mat" specular="0.22" shininess="0.26" metallic="0.18" roughness="0.34" />
+    <material name="silver_trim_mat" specular="0.72" shininess="0.90" metallic="0.88" roughness="0.18" />
+    <material name="gripper_grey_mat" rgba="0.30 0.34 0.33 1" specular="0.30" shininess="0.30" metallic="0.62" roughness="0.38" />
+    <material name="gripper_finger_black_mat" specular="0.42" shininess="0.48" metallic="0.48" roughness="0.48" />
+    <material name="gripper_carriage_grey_mat" specular="0.30" shininess="0.30" metallic="0.62" roughness="0.38" />
+    <material name="gripper_rack_metal_mat" specular="0.72" shininess="0.90" metallic="0.88" roughness="0.18" />
+    <material name="gripper_seeed_yellow_mat" specular="0.22" shininess="0.26" metallic="0.18" roughness="0.34" />
+    <material name="gripper_hardware_black_mat" specular="0.50" shininess="0.72" metallic="0.82" roughness="0.20" />
+    <material name="gripper_base_metal_mat" specular="0.72" shininess="0.90" metallic="0.88" roughness="0.18" />
+    <material name="tcp_mat" rgba="1.00 0.34 0.16 1" />
+    <texture name="floor_checker" type="2d" builtin="checker" rgb1="0.26 0.45 0.58" rgb2="0.12 0.30 0.43" width="512" height="512" />
+    <material name="floor_mat" texture="floor_checker" texrepeat="8 8" texuniform="true" reflectance="0.2" />
+    <material name="table_mat" rgba="0.34 0.36 0.34 1" />
+    <material name="pick_zone_mat" rgba="0.28 0.56 0.34 1" />
+    <material name="place_zone_mat" rgba="0.55 0.53 0.48 1" />
+    <material name="object_red_mat" rgba="0.92 0.18 0.12 1" />
+    <material name="object_blue_mat" rgba="0.04 0.75 0.95 1" />
+    <material name="object_yellow_mat" rgba="0.98 0.82 0.08 1" />
+    <material name="target_mat" rgba="1.00 0.55 0.12 0" />
+  </asset>
+  <default>
+    <joint damping="0.8" armature="0.01" limited="true" />
+    <geom contype="0" conaffinity="0" friction="0.8 0.1 0.1" />
+  </default>
+  <worldbody>
+    <body name="base_link" pos="0 0 0">
+      <inertial pos="-0.000007849 -0.0000011531 0.029841" mass="0.8366" diaginertia="0.00133040 0.00213119 0.00275877" />
+      <geom name="base_link_hardware_black_visual" type="mesh" mesh="base_link_hardware_black_mesh" material="hardware_black_mat" />
+      <geom name="base_link_matte_black_visual" type="mesh" mesh="base_link_matte_black_mesh" material="matte_black_mat" />
+      <geom name="base_link_silver_trim_visual" type="mesh" mesh="base_link_silver_trim_mesh" material="silver_trim_mat" />
+      <body name="link1" pos="-0.00008416 0 0.08465">
+        <joint name="joint1" type="hinge" axis="0 0 1" range="-2.8 2.8" />
+        <inertial pos="0.0001136146 -0.0006163195 0.0236476373" mass="0.1613" diaginertia="0.00025207 0.00015464 0.00023416" />
+        <geom name="link1_anodized_grey_visual" type="mesh" mesh="link1_anodized_grey_mesh" material="anodized_grey_mat" />
+        <geom name="link1_hardware_black_visual" type="mesh" mesh="link1_hardware_black_mesh" material="hardware_black_mat" />
+        <geom name="link1_matte_black_visual" type="mesh" mesh="link1_matte_black_mesh" material="matte_black_mat" />
+        <body name="link2" pos="0.020084 0.031625 0.05555" quat="0.7071054825 -0.7071080799 0 0">
+          <joint name="joint2" type="hinge" axis="0 0 -1" range="-3.14 0" />
+          <inertial pos="-0.1322562231 -0.0030617036 -0.0308306967" mass="1.3266" diaginertia="0.00073374 0.01255987 0.01281387" />
+          <geom name="link2_anodized_grey_visual" type="mesh" mesh="link2_anodized_grey_mesh" material="anodized_grey_mat" />
+          <geom name="link2_hardware_black_visual" type="mesh" mesh="link2_hardware_black_mesh" material="hardware_black_mat" />
+          <geom name="link2_matte_black_visual" type="mesh" mesh="link2_matte_black_mesh" material="matte_black_mat" />
+          <geom name="link2_seeed_yellow_visual" type="mesh" mesh="link2_seeed_yellow_mesh" material="seeed_yellow_mat" />
+          <body name="link3" pos="-0.264 0 0">
+            <joint name="joint3" type="hinge" axis="0 0 1" range="-3.14 0" />
+            <inertial pos="0.1210400358 -0.0536211077 -0.0310137855" mass="0.8353" diaginertia="0.00046807 0.00632695 0.00648221" />
+            <geom name="link3_anodized_grey_visual" type="mesh" mesh="link3_anodized_grey_mesh" material="anodized_grey_mat" />
+            <geom name="link3_hardware_black_visual" type="mesh" mesh="link3_hardware_black_mesh" material="hardware_black_mat" />
+            <geom name="link3_matte_black_visual" type="mesh" mesh="link3_matte_black_mesh" material="matte_black_mat" />
+            <geom name="link3_seeed_yellow_visual" type="mesh" mesh="link3_seeed_yellow_mesh" material="seeed_yellow_mat" />
+            <body name="link4" pos="0.2426 -0.054 -0.001625">
+              <joint name="joint4" type="hinge" axis="0 0 1" range="-1.87 1.57" />
+              <inertial pos="0.0608200956 -0.0511711907 -0.0302994586" mass="0.52" diaginertia="0.00045986 0.00075258 0.00066742" />
+              <geom name="link4_anodized_grey_visual" type="mesh" mesh="link4_anodized_grey_mesh" material="anodized_grey_mat" />
+              <geom name="link4_hardware_black_visual" type="mesh" mesh="link4_hardware_black_mesh" material="hardware_black_mat" />
+              <geom name="link4_matte_black_visual" type="mesh" mesh="link4_matte_black_mesh" material="matte_black_mat" />
+              <geom name="link4_seeed_yellow_visual" type="mesh" mesh="link4_seeed_yellow_mesh" material="matte_black_mat" />
+              <body name="link5" pos="0.078308 -0.0375 -0.03" quat="0.7071054825 -0.7071080799 0 0">
+                <joint name="joint5" type="hinge" axis="0 0 1" range="-1.57 1.57" />
+                <inertial pos="-0.0050280206 0.0000017387 0.0386233236" mass="0.383" diaginertia="0.00019772 0.00021737 0.00017191" />
+                <geom name="link5_anodized_grey_visual" type="mesh" mesh="link5_anodized_grey_mesh" material="anodized_grey_mat" />
+                <geom name="link5_hardware_black_visual" type="mesh" mesh="link5_hardware_black_mesh" material="hardware_black_mat" />
+                <geom name="link5_matte_black_visual" type="mesh" mesh="link5_matte_black_mesh" material="matte_black_mat" />
+                <body name="link6" pos="0.028008 0 0.04" quat="0.7071054825 0 0.7071080799 0">
+                  <joint name="joint6" type="hinge" axis="0 0 1" range="-3.14 3.14" />
+                  <inertial pos="0.0000037642 -0.0001009088 0.0253308606" mass="0.3663" diaginertia="0.00015554 0.00015554 0.00013966" />
+                  <geom name="link6_hardware_black_visual" type="mesh" mesh="link6_hardware_black_mesh" material="hardware_black_mat" />
+                  <geom name="link6_matte_black_visual" type="mesh" mesh="link6_matte_black_mesh" material="matte_black_mat" />
+                  <body name="end_link" pos="0 0 0.15539" quat="0.0000327579 0.7071080791 -0.0000327581 0.7071054818">
+                    <inertial pos="-0.0737654296 -0.0000095081 0.0000070433" mass="0.5" diaginertia="0.00037354 0.00015830 0.00045353" />
+                    <geom name="gripper_base_hardware_black_visual" type="mesh" mesh="gripper_base_hardware_black_mesh" material="gripper_hardware_black_mat" />
+                    <geom name="gripper_base_metal_visual" type="mesh" mesh="gripper_base_metal_mesh" material="gripper_base_metal_mat" />
+                    <geom name="gripper_base_seeed_yellow_visual" type="mesh" mesh="gripper_base_seeed_yellow_mesh" material="gripper_seeed_yellow_mat" />
+                    <geom name="gripper_palm_collision" type="mesh" mesh="gripper_base_collision_mesh" rgba="0.18 0.22 0.21 0.12" contype="1" conaffinity="1" condim="6" mass="0.02" friction="1.2 0.10 0.02" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                    <site name="tcp" pos="-0.105 0 0" size="0.008" rgba="1 0.34 0.16 1" />
+                    <body name="finger_left_link" pos="0 0 0">
+                      <joint name="finger_left" type="slide" axis="0 1 0" range="0 0.05" />
+                      <inertial pos="0 0 0" mass="0.03" diaginertia="0.00001 0.00001 0.00001" />
+                      <geom name="finger_left_body_visual" type="mesh" mesh="finger_left_body_mesh" material="gripper_finger_black_mat" />
+                      <geom name="finger_left_carriage_visual" type="mesh" mesh="finger_left_carriage_mesh" material="gripper_carriage_grey_mat" />
+                      <geom name="finger_left_travel_stop_visual" type="mesh" mesh="finger_left_travel_stop_mesh" material="gripper_seeed_yellow_mat" />
+                      <geom name="finger_left_crossed_rack_visual" type="mesh" mesh="finger_left_crossed_rack_mesh" material="gripper_rack_metal_mat" />
+                      <geom name="finger_left_front_collision" type="mesh" mesh="finger_left_front_collision_mesh" rgba="0.18 0.22 0.21 0.20" contype="1" conaffinity="1" condim="6" margin="0.00015" mass="0.003" friction="1.5 0.04 0.01" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                      <geom name="finger_left_mid_collision" type="mesh" mesh="finger_left_mid_collision_mesh" rgba="0.18 0.22 0.21 0.20" contype="1" conaffinity="1" condim="6" margin="0.00015" mass="0.003" friction="1.5 0.04 0.01" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                      <geom name="finger_left_rear_collision" type="mesh" mesh="finger_left_rear_collision_mesh" rgba="0.18 0.22 0.21 0.20" contype="1" conaffinity="1" condim="6" margin="0.00015" mass="0.004" friction="1.5 0.04 0.01" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                      <geom name="finger_left_carriage_collision" type="mesh" mesh="finger_left_carriage_collision_mesh" rgba="0.18 0.22 0.21 0.12" contype="1" conaffinity="1" condim="6" mass="0.01" friction="1.5 0.04 0.01" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                      <geom name="finger_left_travel_stop_collision" type="mesh" mesh="finger_left_travel_stop_collision_mesh" rgba="0.18 0.22 0.21 0.12" contype="1" conaffinity="1" condim="6" mass="0.01" friction="1.5 0.04 0.01" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                    </body>
+                    <body name="finger_right_link" pos="0 0 0">
+                      <joint name="finger_right" type="slide" axis="0 1 0" range="-0.05 0" />
+                      <inertial pos="0 0 0" mass="0.03" diaginertia="0.00001 0.00001 0.00001" />
+                      <geom name="finger_right_body_visual" type="mesh" mesh="finger_right_body_mesh" material="gripper_finger_black_mat" />
+                      <geom name="finger_right_carriage_visual" type="mesh" mesh="finger_right_carriage_mesh" material="gripper_carriage_grey_mat" />
+                      <geom name="finger_right_travel_stop_visual" type="mesh" mesh="finger_right_travel_stop_mesh" material="gripper_seeed_yellow_mat" />
+                      <geom name="finger_right_crossed_rack_visual" type="mesh" mesh="finger_right_crossed_rack_mesh" material="gripper_rack_metal_mat" />
+                      <geom name="finger_right_front_collision" type="mesh" mesh="finger_right_front_collision_mesh" rgba="0.18 0.22 0.21 0.20" contype="1" conaffinity="1" condim="6" margin="0.00015" mass="0.003" friction="1.5 0.04 0.01" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                      <geom name="finger_right_mid_collision" type="mesh" mesh="finger_right_mid_collision_mesh" rgba="0.18 0.22 0.21 0.20" contype="1" conaffinity="1" condim="6" margin="0.00015" mass="0.003" friction="1.5 0.04 0.01" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                      <geom name="finger_right_rear_collision" type="mesh" mesh="finger_right_rear_collision_mesh" rgba="0.18 0.22 0.21 0.20" contype="1" conaffinity="1" condim="6" margin="0.00015" mass="0.004" friction="1.5 0.04 0.01" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                      <geom name="finger_right_carriage_collision" type="mesh" mesh="finger_right_carriage_collision_mesh" rgba="0.18 0.22 0.21 0.12" contype="1" conaffinity="1" condim="6" mass="0.01" friction="1.5 0.04 0.01" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                      <geom name="finger_right_travel_stop_collision" type="mesh" mesh="finger_right_travel_stop_collision_mesh" rgba="0.18 0.22 0.21 0.12" contype="1" conaffinity="1" condim="6" mass="0.01" friction="1.5 0.04 0.01" solref="0.002 1" solimp="0.98 0.995 0.0005" />
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+  <contact>
+    <exclude body1="finger_left_link" body2="finger_right_link" />
+  </contact>
+  <equality>
+    <joint name="parallel_gripper" joint1="finger_right" joint2="finger_left" polycoef="0 -1 0 0 0" solref="0.002 1" solimp="0.99 0.999 0.001" />
+  </equality>
+  <!-- Simulation position servos; ctrl uses radians (arm) and metres (fingers). -->
+  <actuator>
+    <position name="joint1_position" joint="joint1" kp="100" dampratio="1" ctrllimited="true" ctrlrange="-2.8 2.8" forcelimited="true" forcerange="-35 35" />
+    <position name="joint2_position" joint="joint2" kp="100" dampratio="1" ctrllimited="true" ctrlrange="-3.14 0" forcelimited="true" forcerange="-35 35" />
+    <position name="joint3_position" joint="joint3" kp="100" dampratio="1" ctrllimited="true" ctrlrange="-3.14 0" forcelimited="true" forcerange="-35 35" />
+    <position name="joint4_position" joint="joint4" kp="100" dampratio="1" ctrllimited="true" ctrlrange="-1.87 1.57" forcelimited="true" forcerange="-35 35" />
+    <position name="joint5_position" joint="joint5" kp="100" dampratio="1" ctrllimited="true" ctrlrange="-1.57 1.57" forcelimited="true" forcerange="-35 35" />
+    <position name="joint6_position" joint="joint6" kp="100" dampratio="1" ctrllimited="true" ctrlrange="-3.14 3.14" forcelimited="true" forcerange="-35 35" />
+    <position name="gripper_position" joint="finger_left" kp="400" dampratio="1" ctrllimited="true" ctrlrange="0 0.05" forcelimited="true" forcerange="-40 40" />
+  </actuator>
+</mujoco>

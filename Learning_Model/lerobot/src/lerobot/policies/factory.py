@@ -1,0 +1,497 @@
+#!/usr/bin/env python
+
+# Copyright 2024 The HuggingFace Inc. team. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+from __future__ import annotations
+
+import importlib
+import inspect
+import logging
+from pathlib import Path
+from types import ModuleType
+from typing import TYPE_CHECKING, Any, TypedDict, Unpack
+
+import torch
+
+if TYPE_CHECKING:
+    from lerobot.datasets import LeRobotDatasetMetadata
+
+from lerobot.configs import FeatureType, PreTrainedConfig
+from lerobot.envs import EnvConfig, env_to_policy_features
+from lerobot.lerobot_types import PolicyAction
+from lerobot.processor import (
+    PolicyProcessorPipeline,
+    load_pretrained_policy_processors,
+)
+from lerobot.utils.constants import (
+    ACTION,
+    POLICY_POSTPROCESSOR_DEFAULT_NAME,
+    POLICY_PREPROCESSOR_DEFAULT_NAME,
+)
+from lerobot.utils.feature_utils import dataset_to_policy_features
+from lerobot.utils.import_utils import _peft_available, require_package
+
+from .pretrained import PreTrainedPolicy
+from .utils import validate_visual_features_consistency
+
+if TYPE_CHECKING or _peft_available:
+    from peft import PeftConfig, PeftModel
+else:
+    PeftConfig = None
+    PeftModel = None
+
+
+def get_policy_class(name: str) -> type[PreTrainedPolicy]:
+    """
+    Retrieves a policy class by its registered name.
+
+    Resolution is convention-based: the draccus-registered config class of ``name`` is
+    looked up, its ``configuration_*`` module path is rewritten to ``modeling_*``, and
+    the ``<X>Policy`` class is imported from there. The modeling module is only imported
+    at call time, keeping heavy optional dependencies lazy. This works for both built-in
+    policies and third-party lerobot plugins (anything registered via
+    ``@PreTrainedConfig.register_subclass``).
+
+    Args:
+        name: The registered name of the policy (e.g. "act", "diffusion", "pi0").
+    Returns:
+        The policy class corresponding to the given name.
+
+    Raises:
+        ValueError: If the policy name is not registered.
+        ImportError: If the policy's optional dependencies are not installed.
+    """
+    if name not in PreTrainedConfig.get_known_choices():
+        raise ValueError(
+            f"Unknown policy name '{name}'. Available policies: {PreTrainedConfig.get_known_choices()}"
+        )
+
+    config_cls = PreTrainedConfig.get_choice_class(name)
+    config_cls_name = config_cls.__name__
+
+    model_name = config_cls_name.removesuffix("Config")  # e.g., DiffusionConfig -> Diffusion
+    if model_name == config_cls_name:
+        raise ValueError(
+            f"The config class name '{config_cls_name}' does not follow the expected naming convention."
+            f"Make sure it ends with 'Config'!"
+        )
+    cls_name = model_name + "Policy"  # e.g., DiffusionConfig -> DiffusionPolicy
+
+    module = _import_sibling_policy_module(config_cls, "modeling")
+    if module is None:
+        raise ValueError(f"Policy class for '{name}' is not implemented.")
+    policy_cls = getattr(module, cls_name, None)
+    if policy_cls is None:
+        raise ValueError(
+            f"Policy class '{cls_name}' not found in '{module.__name__}'. "
+            f"Policies must expose '<Name>Policy' in the sibling 'modeling_*' module by naming convention."
+        )
+    return policy_cls
+
+
+def make_policy_config(policy_type: str, **kwargs) -> PreTrainedConfig:
+    """
+    Instantiates a policy configuration object based on the policy type.
+
+    This factory function simplifies the creation of policy configuration objects by
+    mapping a string identifier to the corresponding config class.
+
+    Args:
+        policy_type: The registered type of the policy (any name registered via
+                     ``@PreTrainedConfig.register_subclass``, e.g. "act", "diffusion", "pi0").
+        **kwargs: Keyword arguments to be passed to the configuration class constructor.
+
+    Returns:
+        An instance of a `PreTrainedConfig` subclass.
+
+    Raises:
+        ValueError: If the `policy_type` is not recognized.
+    """
+    try:
+        config_cls = PreTrainedConfig.get_choice_class(policy_type)
+    except Exception as e:
+        raise ValueError(f"Policy type '{policy_type}' is not available.") from e
+    return config_cls(**kwargs)
+
+
+class ProcessorConfigKwargs(TypedDict, total=False):
+    """
+    A TypedDict defining the keyword arguments for processor configuration.
+
+    This provides type hints for the optional arguments passed to `make_pre_post_processors`,
+    improving code clarity and enabling static analysis.
+
+    Attributes:
+        preprocessor_config_filename: The filename for the preprocessor configuration.
+        postprocessor_config_filename: The filename for the postprocessor configuration.
+        preprocessor_overrides: A dictionary of overrides for the preprocessor configuration.
+        postprocessor_overrides: A dictionary of overrides for the postprocessor configuration.
+        dataset_stats: Dataset statistics for normalization.
+    """
+
+    preprocessor_config_filename: str | None
+    postprocessor_config_filename: str | None
+    preprocessor_overrides: dict[str, Any] | None
+    postprocessor_overrides: dict[str, Any] | None
+    dataset_stats: dict[str, dict[str, torch.Tensor]] | None
+    dataset_meta: Any | None
+
+
+def make_pre_post_processors(
+    policy_cfg: PreTrainedConfig,
+    pretrained_path: str | Path | None = None,
+    pretrained_revision: str | None = None,
+    **kwargs: Unpack[ProcessorConfigKwargs],
+) -> tuple[
+    PolicyProcessorPipeline[dict[str, Any], dict[str, Any]],
+    PolicyProcessorPipeline[PolicyAction, PolicyAction],
+]:
+    """
+    Create or load pre- and post-processor pipelines for a given policy.
+
+    This function acts as a factory. It can either load existing processor pipelines
+    from a pretrained path or create new ones from scratch based on the policy
+    configuration. Each policy type has a dedicated factory function for its
+    processors (e.g., `make_tdmpc_pre_post_processors`).
+
+    Args:
+        policy_cfg: The configuration of the policy for which to create processors.
+        pretrained_path: An optional path to load pretrained processor pipelines from.
+            If provided, pipelines are loaded from this path.
+        **kwargs: Keyword arguments for processor configuration, as defined in
+            `ProcessorConfigKwargs`.
+
+    Returns:
+        A tuple containing the input (pre-processor) and output (post-processor) pipelines.
+
+    Raises:
+        ValueError: If no processor factory exists for the given policy configuration type.
+    """
+    if pretrained_path:
+        preprocessor_config_filename = (
+            kwargs.get("preprocessor_config_filename") or f"{POLICY_PREPROCESSOR_DEFAULT_NAME}.json"
+        )
+        postprocessor_config_filename = (
+            kwargs.get("postprocessor_config_filename") or f"{POLICY_POSTPROCESSOR_DEFAULT_NAME}.json"
+        )
+        custom_processors = _make_pretrained_processors_from_policy_config(
+            config=policy_cfg,
+            pretrained_path=pretrained_path,
+            revision=pretrained_revision,
+            dataset_stats=kwargs.get("dataset_stats"),
+            dataset_meta=kwargs.get("dataset_meta"),
+            preprocessor_overrides=kwargs.get("preprocessor_overrides"),
+            postprocessor_overrides=kwargs.get("postprocessor_overrides"),
+            preprocessor_config_filename=preprocessor_config_filename,
+            postprocessor_config_filename=postprocessor_config_filename,
+        )
+        if custom_processors is not None:
+            return custom_processors
+
+        return load_pretrained_policy_processors(
+            pretrained_path,
+            revision=pretrained_revision,
+            preprocessor_overrides=kwargs.get("preprocessor_overrides"),
+            postprocessor_overrides=kwargs.get("postprocessor_overrides"),
+            preprocessor_config_filename=preprocessor_config_filename,
+            postprocessor_config_filename=postprocessor_config_filename,
+        )
+
+    # Create new processors from the policy config, resolving the per-policy factory
+    # function by naming convention (lazy import keeps optional dependencies optional).
+    return _make_processors_from_policy_config(
+        config=policy_cfg,
+        dataset_stats=kwargs.get("dataset_stats"),
+        dataset_meta=kwargs.get("dataset_meta"),
+    )
+
+
+def make_policy(
+    cfg: PreTrainedConfig,
+    ds_meta: LeRobotDatasetMetadata | None = None,
+    env_cfg: EnvConfig | None = None,
+    rename_map: dict[str, str] | None = None,
+    defer_weight_load: bool = False,
+    pretrained_path: str | Path | None = None,
+) -> PreTrainedPolicy:
+    """
+    Instantiate a policy model.
+
+    This factory function handles the logic of creating a policy, which requires
+    determining the input and output feature shapes. These shapes can be derived
+    either from a `LeRobotDatasetMetadata` object or an `EnvConfig` object. The function
+    can either initialize a new policy from scratch or load a pretrained one.
+
+    Args:
+        cfg (PreTrainedConfig): The configuration for the policy to be created. If
+            `cfg.pretrained_path` is set, the policy will be loaded with weights from that path.
+        ds_meta (LeRobotDatasetMetadata | None): Dataset metadata used to infer feature shapes and
+            types. Also provides statistics for normalization layers.
+        env_cfg (EnvConfig | None): Environment configuration used to infer feature shapes and
+            types. One of `ds_meta` or `env_cfg` must be provided.
+        rename_map (dict[str, str] | None): Optional mapping of dataset or environment feature
+            keys to match expected policy feature names (e.g., `"left"` → `"camera1"`).
+        defer_weight_load (bool): Build the exact policy `from_pretrained` would build — same
+            config resolution, same stats-derived buffers, same device placement and eval mode —
+            but skip the safetensors weight load. Used when resuming from a DCP checkpoint, whose
+            sharded weights stream in after `accelerator.prepare()` (the distributed checkpoint
+            engine overwrites the random init).
+        pretrained_path (str | Path | None): Load the weights (or PEFT adapter) from here instead
+            of `cfg.pretrained_path`, which keeps naming the model the policy was fine-tuned from
+            once the policy is built. Used when resuming from a checkpoint.
+
+    Returns:
+        PreTrainedPolicy: An instantiated and device-placed policy model.
+
+    Raises:
+        ValueError: If both or neither of `ds_meta` and `env_cfg` are provided.
+        NotImplementedError: If attempting to use an unsupported policy-backend combination
+            (e.g., VQBeT with 'mps').
+    """
+    if bool(ds_meta) == bool(env_cfg):
+        raise ValueError("Either one of a dataset metadata or a sim env must be provided.")
+
+    # NOTE: Currently, if you try to run vqbet with mps backend, you'll get this error.
+    # TODO(aliberts, rcadene): Implement a check_backend_compatibility in policies?
+    # NotImplementedError: The operator 'aten::unique_dim' is not currently implemented for the MPS device. If
+    # you want this op to be added in priority during the prototype phase of this feature, please comment on
+    # https://github.com/pytorch/pytorch/issues/77764. As a temporary fix, you can set the environment
+    # variable `PYTORCH_ENABLE_MPS_FALLBACK=1` to use the CPU as a fallback for this op. WARNING: this will be
+    # slower than running natively on MPS.
+    if cfg.type == "vqbet" and cfg.device == "mps":
+        raise NotImplementedError(
+            "Current implementation of VQBeT does not support `mps` backend. "
+            "Please use `cpu` or `cuda` backend."
+        )
+
+    policy_cls = get_policy_class(cfg.type)
+    # Policies read `pretrained_path` while building to skip initializing weights the load will
+    # overwrite, so it names the weight source until the policy is built, then the parent again.
+    parent_path = cfg.pretrained_path
+    if pretrained_path is not None:
+        cfg.pretrained_path = Path(pretrained_path)
+
+    kwargs: dict[str, Any] = {}
+    if ds_meta is not None:
+        features = dataset_to_policy_features(ds_meta.features)
+    else:
+        if not cfg.pretrained_path:
+            logging.warning(
+                "You are instantiating a policy from scratch and its features are parsed from an environment "
+                "rather than a dataset. Normalization modules inside the policy will have infinite values "
+                "by default without stats from a dataset."
+            )
+        if env_cfg is None:
+            raise ValueError("env_cfg cannot be None when ds_meta is not provided")
+        features = env_to_policy_features(env_cfg)
+
+    if rename_map:
+        features = {rename_map.get(key, key): feature for key, feature in features.items()}
+
+    cfg.output_features = {key: ft for key, ft in features.items() if ft.type is FeatureType.ACTION}
+    if not cfg.input_features:
+        cfg.input_features = {key: ft for key, ft in features.items() if key not in cfg.output_features}
+
+    # Store action feature names for relative_exclude_joints support
+    if ds_meta is not None and hasattr(cfg, "action_feature_names"):
+        raw_action_feature = next(
+            (
+                feature
+                for raw_key, feature in ds_meta.features.items()
+                if (rename_map or {}).get(raw_key, raw_key) == ACTION
+            ),
+            None,
+        )
+        action_names = raw_action_feature.get("names") if raw_action_feature is not None else None
+        if action_names is not None:
+            # Grouped metadata stores dimension names in the values, not the group keys.
+            if isinstance(action_names, dict) and all(
+                isinstance(group, (list, tuple)) for group in action_names.values()
+            ):
+                action_names = [name for group in action_names.values() for name in group]
+            cfg.action_feature_names = list(action_names)
+    if ds_meta is not None:
+        set_dataset_feature_metadata = getattr(cfg, "set_dataset_feature_metadata", None)
+        if callable(set_dataset_feature_metadata):
+            ds_feature = ds_meta.features
+            if rename_map:  # use the policy-side (renamed) keys
+                ds_feature = {
+                    rename_map.get(dataset_key, dataset_key): feature
+                    for dataset_key, feature in ds_meta.features.items()
+                }
+            set_dataset_feature_metadata(ds_feature)
+        cfg._runtime_dataset_meta = ds_meta
+
+    kwargs["config"] = cfg
+
+    # Pass dataset_stats to the policy if available (needed for some policies like SARM)
+    if ds_meta is not None and hasattr(ds_meta, "stats"):
+        kwargs["dataset_stats"] = ds_meta.stats
+
+    if ds_meta is not None:
+        kwargs["dataset_meta"] = ds_meta
+
+    if not cfg.pretrained_path and cfg.use_peft:
+        raise ValueError(
+            "Instantiating a policy with `use_peft=True` without a checkpoint is not supported since that requires "
+            "the PEFT config parameters to be set. For training with PEFT, see `lerobot_train.py` on how to do that."
+        )
+
+    if cfg.pretrained_path and not cfg.use_peft:
+        if defer_weight_load:
+            # Same construction path as from_pretrained (config already resolved from the
+            # checkpoint by the caller; dataset_stats/dataset_meta kwargs identical), minus the
+            # weight load — parity by construction.
+            policy = policy_cls(**kwargs)
+            policy.eval()
+        else:
+            # Load a pretrained policy and override the config if needed (for example, if there
+            # are inference-time hyperparameters that we want to vary).
+            kwargs["pretrained_name_or_path"] = cfg.pretrained_path
+            kwargs["revision"] = cfg.pretrained_revision
+            policy = policy_cls.from_pretrained(**kwargs)
+    elif cfg.pretrained_path and cfg.use_peft:
+        # Load a pretrained PEFT model on top of the policy. The pretrained path points to the folder/repo
+        # of the adapter and the adapter's config contains the path to the base policy. So we need the
+        # adapter config first, then load the correct policy and then apply PEFT.
+        require_package("peft", extra="peft")
+
+        logging.info("Loading policy's PEFT adapter.")
+
+        peft_pretrained_path = str(cfg.pretrained_path)
+        peft_config = PeftConfig.from_pretrained(
+            peft_pretrained_path,
+            revision=cfg.pretrained_revision,
+        )
+
+        kwargs["pretrained_name_or_path"] = peft_config.base_model_name_or_path
+        if not kwargs["pretrained_name_or_path"]:
+            # This means that there's a bug or we trained a policy from scratch using PEFT.
+            # It is more likely that this is a bug so we'll raise an error.
+            raise ValueError(
+                "No pretrained model name found in adapter config. Can't instantiate the pre-trained policy on which "
+                "the adapter was trained."
+            )
+
+        kwargs["revision"] = peft_config.revision
+        policy = policy_cls.from_pretrained(**kwargs)
+        policy = PeftModel.from_pretrained(
+            policy,
+            peft_pretrained_path,
+            config=peft_config,
+            revision=cfg.pretrained_revision,
+            is_trainable=True,
+        )
+
+    else:
+        # Make a fresh policy.
+        policy = policy_cls(**kwargs)
+
+    if pretrained_path is not None:
+        cfg.pretrained_path = parent_path
+        base_policy = policy.get_base_model() if hasattr(policy, "get_base_model") else policy
+        base_policy.config.pretrained_path = parent_path
+
+    policy.to(cfg.device)
+    assert isinstance(policy, torch.nn.Module)
+
+    # policy = torch.compile(policy, mode="reduce-overhead")
+
+    if not rename_map:
+        validate_visual_features_consistency(cfg, features)
+        # TODO: (jadechoghari) - add a check_state(cfg, features) and check_action(cfg, features)
+
+    return policy
+
+
+def _import_sibling_policy_module(config_cls: type[PreTrainedConfig], prefix: str) -> ModuleType | None:
+    """Import a config class' sibling ``{prefix}_*`` module, or None when that module does not exist."""
+    module_path = config_cls.__module__.replace("configuration_", f"{prefix}_")
+    try:
+        return importlib.import_module(module_path)
+    except ModuleNotFoundError as e:
+        if e.name == module_path:
+            # The sibling module itself does not exist for this policy type. A missing optional
+            # dependency inside an existing module propagates unchanged instead, so its
+            # actionable install hint stays visible.
+            return None
+        raise
+
+
+def _make_pretrained_processors_from_policy_config(
+    config: PreTrainedConfig,
+    pretrained_path: str | Path,
+    *,
+    revision: str | None,
+    dataset_stats: dict[str, dict[str, torch.Tensor]] | None,
+    dataset_meta: Any | None,
+    preprocessor_overrides: dict[str, Any] | None,
+    postprocessor_overrides: dict[str, Any] | None,
+    preprocessor_config_filename: str,
+    postprocessor_config_filename: str,
+) -> tuple[Any, Any] | None:
+    """Let a policy rebuild pretrained processors when its current runtime requires it."""
+    function_name = f"make_{config.type}_pre_post_processors_from_pretrained"
+    module = _import_sibling_policy_module(config.__class__, "processor")
+    if module is None:
+        return None
+    function = getattr(module, function_name, None)
+    if function is None:
+        return None
+    return function(
+        config=config,
+        pretrained_path=pretrained_path,
+        revision=revision,
+        dataset_stats=dataset_stats,
+        dataset_meta=dataset_meta,
+        preprocessor_overrides=preprocessor_overrides,
+        postprocessor_overrides=postprocessor_overrides,
+        preprocessor_config_filename=preprocessor_config_filename,
+        postprocessor_config_filename=postprocessor_config_filename,
+    )
+
+
+def _make_processors_from_policy_config(
+    config: PreTrainedConfig,
+    dataset_stats: dict[str, dict[str, torch.Tensor]] | None = None,
+    dataset_meta: Any | None = None,
+) -> tuple[Any, Any]:
+    """Create pre- and post-processors from a policy configuration using dynamic imports.
+
+    Resolves ``make_{type}_pre_post_processors`` from the policy's ``processor_*`` module
+    by naming convention. Works for built-in policies and 3rd party lerobot plugins.
+
+    Args:
+        config: The policy configuration object.
+        dataset_stats: Dataset statistics for normalization.
+        dataset_meta: Dataset metadata, forwarded only to factories that declare a
+            ``dataset_meta`` parameter (e.g. groot, molmoact2).
+    Returns:
+        A tuple containing the input (pre-processor) and output (post-processor) pipelines.
+    """
+
+    policy_type = config.type
+    function_name = f"make_{policy_type}_pre_post_processors"
+    logging.debug(f"Instantiating pre/post processors using function '{function_name}'")
+    module = _import_sibling_policy_module(config.__class__, "processor")
+    if module is None:
+        raise ValueError(f"Processor for policy type '{policy_type}' is not implemented.")
+    function = getattr(module, function_name, None)
+    if function is None:
+        raise ValueError(f"Processor for policy type '{policy_type}' is not implemented.")
+    call_kwargs: dict[str, Any] = {"dataset_stats": dataset_stats}
+    if "dataset_meta" in inspect.signature(function).parameters:
+        call_kwargs["dataset_meta"] = dataset_meta
+    return function(config, **call_kwargs)
