@@ -1,37 +1,37 @@
 {
   "shoulder_pan": {
     "id": 1,
-    "position_rad": 0.06542305648326874,
-    "position_deg": 3.7484650193372966
+    "position_rad": 0.10433356463909149,
+    "position_deg": 5.9778729153753085
   },
   "shoulder_lift": {
     "id": 2,
-    "position_rad": -0.026131074875593185,
-    "position_deg": -1.4972003045118323
+    "position_rad": -0.04787518084049225,
+    "position_deg": -2.743045805585787
   },
   "elbow_flex": {
     "id": 3,
-    "position_rad": -0.02079041674733162,
-    "position_deg": -1.1912031339402067
+    "position_rad": -0.02536812424659729,
+    "position_deg": -1.453486453493516
   },
   "wrist_flex": {
     "id": 4,
-    "position_rad": -0.0036240178160369396,
-    "position_deg": -0.20764092573913462
+    "position_rad": -0.004005493130534887,
+    "position_deg": -0.22949785124829278
   },
   "wrist_yaw": {
     "id": 5,
-    "position_rad": 0.00019073777366429567,
-    "position_deg": 0.010928469424685686
+    "position_rad": 0.01773861236870289,
+    "position_deg": 1.0163476231452357
   },
   "wrist_roll": {
     "id": 6,
-    "position_rad": -0.031090257689356804,
-    "position_deg": -1.7813405495742998
+    "position_rad": -0.06885633617639542,
+    "position_deg": -3.9451774556414256
   },
   "gripper": {
     "id": 7,
-    "position_rad": 3.017662286758423,
-    "position_deg": 172.8993130270544
+    "position_rad": 2.819676399230957,
+    "position_deg": 161.5555572685788
   }
 }

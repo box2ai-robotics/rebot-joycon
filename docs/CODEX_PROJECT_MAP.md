@@ -4,7 +4,7 @@
 
 | 任务 | 权威文件 / 符号 | 直接验证 |
 | --- | --- | --- |
-| 直接运行示例 / 已有策略 | [运行示例](../README_zh.md#运行)；[运行策略](../Learning_Model/README_zh.md#运行策略)；`Learning_Model/run_rebot_policy.py`：`main`、`POLICY_PATH` | README 命令 Bash 语法、入口路径和本地链接静态检查；推理需已有完整模型，脚本检查缺失文件后停止 |
+| 直接运行示例 / 已有策略 | [零位校准](../README_zh.md#零位校准与使用)；[运行示例](../README_zh.md#运行)：1–6 号独立命令及各控制方式按键；[运行策略](../Learning_Model/README_zh.md#运行策略)；`Learning_Model/run_rebot_policy.py`：`main`、`POLICY_PATH` | README 命令 Bash 语法、入口路径、按键映射和新增本地链接静态检查；推理需已有完整模型，脚本检查缺失文件后停止 |
 | 遥操启动缺少 `teleop` / `robot` 配置 | [真机遥操](../Learning_Model/README_zh.md#真机遥操)的完整命令；`lerobot_teleoperate.TeleoperateConfig` | Bash 语法检查与仅配置解析；未定义 `REBOT_ARGS` 时展开为空，复现缺字段错误；不启动设备 |
 | LeRobot 离线自检回中报 `Invalid gripper command or torque feedback` | `Learning_Model/lerobot/tests/teleoperators/test_joycon.py`：`test_calibrated_robot_home_gains_and_timeout`；follower `_send_gripper` | 模拟反馈须含 `pos/vel/torq`；六轴检查电机端增益，MotorBridge 夹爪检查主机 PD 限幅力矩；三文件自检命令与 136 项通过记录见 [RUNBOOK](RUNBOOK.md) |
 | LeRobot 相机 MJPG 采集格式 | `Learning_Model/run_rebot_policy.py`：`cameras`；`Learning_Model/README.md`：相机命令参数；LeRobot `OpenCVCamera._validate_fourcc` | 入口配置及文档 JSON 静态核对；保持 640×480、30 FPS；相机实测待验证 |

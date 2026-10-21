@@ -26,35 +26,6 @@ git clone https://github.com/box2ai-robotics/joycon-robotics.git joycon-robotics
 
 Skip cloning if the directory already exists. For drivers, Bluetooth pairing, and troubleshooting, follow [joycon-robotics/README.md](joycon-robotics/README.md) ([online copy](https://github.com/box2ai-robotics/joycon-robotics/blob/master/README.md)). Use the same `.venv` for its Python installation.
 
-## Run
-
-Run `.venv/bin/python examples/<filename>` with a file below:
-
-| Control | Simulation | Real hardware |
-| --- | --- | --- |
-| Keyboard joints | `1_ReBot_B601_DM_Key_qpos_SIM.py` | `4_ReBot_B601_DM_Key_qpos_REAL.py` |
-| Keyboard end-effector IK | `2_ReBot_B601_DM_Key_Gpos_SIM.py` | `5_ReBot_B601_DM_Key_Gpos_REAL.py` |
-| Right Joy-Con | `3_ReBot_B601_DM_Joycon_Gpos_SIM.py` | `6_ReBot_B601_DM_Joycon_Gpos_REAL.py` |
-
-For example, keyboard translation/rotation:
-
-```bash
-.venv/bin/python examples/2_ReBot_B601_DM_Key_Gpos_SIM.py
-```
-
-**Examples 4–6 immediately enable the arm and send a home target (TCP Z = 0.25 m, gripper closed).** They detect `/dev/ttyACM0` or `/dev/ttyACM1` using serial string `0000000`; serial access is required. All examples open a MuJoCo window.
-
-| Mode | Keys |
-| --- | --- |
-| Joint control (1/4) | `1…6` increase; `q/w/e/r/t/y` decrease; `7/u` close/open gripper. |
-| Translation (2/5) | X: `w/s`; Y: `a/d`; Z: `r/f` (positive/negative). |
-| Rotation (2/5) | Roll: `e/q`; pitch: `g/t`; yaw: `z/c` (positive/negative). |
-| Gripper (2/5) | `1/3` close/open. |
-| Keyboard modes | Hold to update the target; release to stop updating; `0` returns home. |
-| Joy-Con (3/6) | `ZR` toggles the gripper with one-second full-travel target interpolation. |
-
-Closing the window normally returns the real arm home before disabling it. `Ctrl+C` or an exception disables it without an additional return-home motion.
-
 <a id="零位校准与使用"></a>
 
 ## Calibration
@@ -68,6 +39,83 @@ To recalibrate, place the arm at mechanical zero with the gripper fully closed:
 ```
 
 This reads feedback without enabling motors or commanding motion. Keep both files in [examples/calibration](examples/calibration): `rebot.json` and `rebot.encoders.json`. They are shared with LeRobot and must match your arm.
+
+## Run
+
+Run these commands from the repository root, choosing one example at a time. Examples 1–3 run in simulation; 4–6 control real hardware. All examples open a MuJoCo window. In keyboard modes, hold a key to update the target, release it to stop updating, and press `0` to return home.
+
+### Simulation examples
+
+#### 1. Keyboard joint control (qpos)
+
+Adjust individual joint angles to check each joint's direction and gripper movement.
+
+```bash
+.venv/bin/python examples/1_ReBot_B601_DM_Key_qpos_SIM.py
+```
+
+| Control | Increase angle / close | Decrease angle / open |
+| --- | --- | --- |
+| Joints 1–6 (in order) | `1`, `2`, `3`, `4`, `5`, `6` | `q`, `w`, `e`, `r`, `t`, `y` |
+| Gripper | `7` closes | `u` opens |
+
+#### 2. Keyboard end-effector control (gpos / IK)
+
+Adjust the end-effector position and orientation; inverse kinematics (IK) computes the joint angles. Use this to test translation, rotation, and gripper coordination.
+
+```bash
+.venv/bin/python examples/2_ReBot_B601_DM_Key_Gpos_SIM.py
+```
+
+| Control | Positive / close | Negative / open |
+| --- | --- | --- |
+| X translation | `w` | `s` |
+| Y translation | `a` | `d` |
+| Z translation | `r` | `f` |
+| Roll | `e` | `q` |
+| Pitch | `g` | `t` |
+| Yaw | `z` | `c` |
+| Gripper | `1` closes | `3` opens |
+
+#### 3. Right Joy-Con end-effector control
+
+Use the right Joy-Con to provide end-effector position and orientation targets, which IK converts into simulated arm motion. Install `joycon-robotics` and complete Bluetooth pairing following the [installation instructions](#installation).
+
+```bash
+.venv/bin/python examples/3_ReBot_B601_DM_Joycon_Gpos_SIM.py
+```
+
+Press `ZR` to toggle the gripper with one-second full-travel target interpolation. See the [joycon-robotics usage guide](https://github.com/box2ai-robotics/joycon-robotics/blob/master/README.md) for controller operation.
+
+### Real hardware examples
+
+Before running, check that the files in [Calibration](#calibration) match your arm. **Examples 4–6 immediately enable the arm and send a home target (TCP Z = 0.25 m, gripper closed).** They detect `/dev/ttyACM0` or `/dev/ttyACM1` using serial string `0000000`; serial access is required.
+
+#### 4. Keyboard joint control (qpos)
+
+Control real joint angles with a MuJoCo display. Keys match [example 1](#1-keyboard-joint-control-qpos): `1…6` increase joint angles, `q/w/e/r/t/y` decrease them, `7/u` close/open the gripper, and `0` returns home.
+
+```bash
+.venv/bin/python examples/4_ReBot_B601_DM_Key_qpos_REAL.py
+```
+
+#### 5. Keyboard end-effector control (gpos / IK)
+
+Use IK to translate and rotate the real end effector with a MuJoCo display. Keys match [example 2](#2-keyboard-end-effector-control-gpos--ik): `w/s`, `a/d`, `r/f` control X/Y/Z; `e/q`, `g/t`, `z/c` control roll/pitch/yaw; `1/3` close/open the gripper; `0` returns home.
+
+```bash
+.venv/bin/python examples/5_ReBot_B601_DM_Key_Gpos_REAL.py
+```
+
+#### 6. Right Joy-Con end-effector control
+
+Use a paired right Joy-Con to control the real end-effector position and orientation with a MuJoCo display. As in [example 3](#3-right-joy-con-end-effector-control), `joycon-robotics` is required; `ZR` toggles the gripper with one-second full-travel target interpolation.
+
+```bash
+.venv/bin/python examples/6_ReBot_B601_DM_Joycon_Gpos_REAL.py
+```
+
+Closing the window normally returns the real arm home before disabling it. `Ctrl+C` or an exception disables it without an additional return-home motion.
 
 ## Directory guide
 

@@ -26,35 +26,6 @@ git clone https://github.com/box2ai-robotics/joycon-robotics.git joycon-robotics
 
 已有目录时跳过克隆。驱动安装、蓝牙配对和常见问题直接参阅 [joycon-robotics/README.md](joycon-robotics/README.md)（[中文版](joycon-robotics/README_zh.md) / [在线说明](https://github.com/box2ai-robotics/joycon-robotics/blob/master/README_zh.md)）；其中 Python 包安装使用同一个 `.venv` 环境。
 
-## 运行
-
-在根目录执行 `.venv/bin/python examples/<文件名>`，按需选择：
-
-| 控制方式 | 仿真 | 真机 |
-| --- | --- | --- |
-| 键盘关节 | `1_ReBot_B601_DM_Key_qpos_SIM.py` | `4_ReBot_B601_DM_Key_qpos_REAL.py` |
-| 键盘末端 IK | `2_ReBot_B601_DM_Key_Gpos_SIM.py` | `5_ReBot_B601_DM_Key_Gpos_REAL.py` |
-| 右 Joy-Con | `3_ReBot_B601_DM_Joycon_Gpos_SIM.py` | `6_ReBot_B601_DM_Joycon_Gpos_REAL.py` |
-
-例如，键盘控制前后左右、升降及旋转：
-
-```bash
-.venv/bin/python examples/2_ReBot_B601_DM_Key_Gpos_SIM.py
-```
-
-**4–6 号启动即使能并发送回中目标（TCP Z=0.25 m、夹爪闭合）。** 串口按序列号 `0000000` 自动匹配 `/dev/ttyACM0` 或 `/dev/ttyACM1`，需有串口权限。全部示例打开 MuJoCo 窗口。
-
-| 模式 | 按键 |
-| --- | --- |
-| 关节（1/4） | `1…6` 增加，`q/w/e/r/t/y` 减少；`7/u` 闭爪/开爪。 |
-| 平移（2/5） | X：`w/s`；Y：`a/d`；Z：`r/f`（正向/负向）。 |
-| 旋转（2/5） | Roll：`e/q`；Pitch：`g/t`；Yaw：`z/c`（正向/负向）。 |
-| 夹爪（2/5） | `1/3` 闭爪/开爪。 |
-| 键盘模式 | 按住更新目标，松开停止更新；`0` 回中。 |
-| Joy-Con（3/6） | `ZR` 切换夹爪，一秒全行程目标插补。 |
-
-正常关窗时，真机回中后失能；`Ctrl+C` 或异常直接失能，不额外回中。
-
 ## 零位校准与使用
 
 需要重新校准时，将机械臂摆到机械零位、夹爪完全闭合：
@@ -66,6 +37,83 @@ git clone https://github.com/box2ai-robotics/joycon-robotics.git joycon-robotics
 ```
 
 脚本只读取反馈，不使能、不发运动指令。[examples/calibration](examples/calibration) 下的 `rebot.json` 和 `rebot.encoders.json` 须一起保留，与 LeRobot 共用，校准值须适用于你的机械臂。
+
+## 运行
+
+以下命令均在仓库根目录执行，每次选择一个示例。1–3 号为仿真，4–6 号控制真机；全部示例打开 MuJoCo 窗口。键盘模式按住按键更新目标，松开停止更新，`0` 回中。
+
+### 仿真示例
+
+#### 1. 键盘关节控制（qpos）
+
+直接调整各关节角度，适合逐轴检查运动方向和夹爪开合。
+
+```bash
+.venv/bin/python examples/1_ReBot_B601_DM_Key_qpos_SIM.py
+```
+
+| 控制对象 | 增加角度 / 闭爪 | 减少角度 / 开爪 |
+| --- | --- | --- |
+| 关节 1–6（按顺序对应） | `1`、`2`、`3`、`4`、`5`、`6` | `q`、`w`、`e`、`r`、`t`、`y` |
+| 夹爪 | `7` 闭爪 | `u` 开爪 |
+
+#### 2. 键盘末端位姿控制（gpos / IK）
+
+调整末端位置与姿态，由逆运动学（IK）计算关节角度，适合测试平移、旋转和夹爪配合。
+
+```bash
+.venv/bin/python examples/2_ReBot_B601_DM_Key_Gpos_SIM.py
+```
+
+| 控制对象 | 正向 / 闭爪 | 负向 / 开爪 |
+| --- | --- | --- |
+| X 平移 | `w` | `s` |
+| Y 平移 | `a` | `d` |
+| Z 平移 | `r` | `f` |
+| Roll 旋转 | `e` | `q` |
+| Pitch 旋转 | `g` | `t` |
+| Yaw 旋转 | `z` | `c` |
+| 夹爪 | `1` 闭爪 | `3` 开爪 |
+
+#### 3. 右 Joy-Con 末端位姿控制
+
+使用右 Joy-Con 提供末端位置与姿态，经 IK 驱动仿真机械臂。先按[安装说明](#安装)安装 `joycon-robotics` 并完成蓝牙配对。
+
+```bash
+.venv/bin/python examples/3_ReBot_B601_DM_Joycon_Gpos_SIM.py
+```
+
+按 `ZR` 切换夹爪开合，目标按一秒全行程插补。手柄操作详见 [joycon-robotics 使用说明](https://github.com/box2ai-robotics/joycon-robotics/blob/master/README_zh.md)。
+
+### 真机示例
+
+运行前确认[零位校准与使用](#零位校准与使用)中的校准文件适用于当前机械臂。**4–6 号启动即使能并发送回中目标（TCP Z=0.25 m、夹爪闭合）。** 串口按序列号 `0000000` 自动匹配 `/dev/ttyACM0` 或 `/dev/ttyACM1`，需有串口权限。
+
+#### 4. 键盘关节控制（qpos）
+
+直接控制真机各关节角度，并在 MuJoCo 中显示。按键与 [1 号仿真](#1-键盘关节控制qpos)一致：`1…6` 增加关节角度，`q/w/e/r/t/y` 减少，`7/u` 闭爪/开爪，`0` 回中。
+
+```bash
+.venv/bin/python examples/4_ReBot_B601_DM_Key_qpos_REAL.py
+```
+
+#### 5. 键盘末端位姿控制（gpos / IK）
+
+通过 IK 控制真机末端平移与旋转，并在 MuJoCo 中显示。按键与 [2 号仿真](#2-键盘末端位姿控制gpos--ik)一致：`w/s`、`a/d`、`r/f` 控制 X/Y/Z，`e/q`、`g/t`、`z/c` 控制 Roll/Pitch/Yaw，`1/3` 闭爪/开爪，`0` 回中。
+
+```bash
+.venv/bin/python examples/5_ReBot_B601_DM_Key_Gpos_REAL.py
+```
+
+#### 6. 右 Joy-Con 末端位姿控制
+
+使用已配对的右 Joy-Con 控制真机末端位置与姿态，并在 MuJoCo 中显示。与 [3 号仿真](#3-右-joy-con-末端位姿控制)一样，需安装 `joycon-robotics`；`ZR` 切换夹爪开合，目标按一秒全行程插补。
+
+```bash
+.venv/bin/python examples/6_ReBot_B601_DM_Joycon_Gpos_REAL.py
+```
+
+正常关窗时，真机回中后失能；`Ctrl+C` 或异常直接失能，不额外回中。
 
 ## 目录说明
 
