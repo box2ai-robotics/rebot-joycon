@@ -72,6 +72,9 @@ wandb/
 # External upstream dependency; clone as described in README.md
 /joycon-robotics/
 
-# Keep examples/calibration/*.json, URDF assets, and documentation images.
+# Obsolete local receipts are ignored; runtime no longer reads or creates them.
+/examples/calibration_records/
+
+# Keep URDF assets and documentation images.
 # Do not blanket-ignore JSON/JSONL: only runtime log directories are excluded.
 # Learning_Model/lerobot contains project adaptations: do not ignore its source.

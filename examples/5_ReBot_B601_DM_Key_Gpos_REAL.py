@@ -7,6 +7,7 @@ if __name__ == "__main__":
 
 import os
 from pathlib import Path
+from rebot_port import select_port
 from importlib import import_module
 ReBotCalibration = import_module("0_calibrate_rebot").ReBotCalibration
 import mujoco
@@ -47,6 +48,8 @@ JOINT_INCREMENT = 0.01  # Can be adjusted as needed
 GRIPPER_INCREMENT = 0.02  # rad/10 ms，按实际经过时间缩放
 POSITION_INSERMENT = 0.003 * (2 / 3)
 CONTROL_PERIOD = 0.01  # 目标 100 Hz；串口与 IK 超时会降低实际频率
+HOME_MAX_VELOCITY = 0.35  # 七路回中目标速度上限 rad/s
+HOME_TIMEOUT = 30.0  # 超时失能，避免夹爪受阻后持续回中
 VIEWER_PERIOD = 1.0 / 30.0
 
 # create robot
@@ -133,16 +136,7 @@ listener = keyboard.Listener(on_press=on_press, on_release=on_release)
 target_gpos_last = init_gpos.copy()
 target_qpos_last = init_qpos.copy()
 
-# auto ckeck the ttyACM
-output1 = os.popen('udevadm info -a -n /dev/ttyACM0 | grep serial').read()
-output2 = os.popen('udevadm info -a -n /dev/ttyACM1 | grep serial').read()
-
-if "0000000" in output1:
-    arm_tty = "/dev/ttyACM0"
-elif "0000000" in output2:
-    arm_tty = "/dev/ttyACM1"
-else:
-    raise RuntimeError("找不到ReBot机械臂驱动器，请重新拔插检查电源后重试")
+arm_tty = select_port()
 
 # init ReBot Real Hardware
 rebot_right = None
@@ -150,7 +144,7 @@ rebot_right = None
 normal_exit = False
 try:
     rebot_right = ReBot(driver_port=arm_tty, arm_type="rebot_b601_dm", side="right")
-    rebot_right.Go_Home_Pose()
+    home_done = rebot_right.Go_Home_Pose(max_velocity=HOME_MAX_VELOCITY)
     listener.start()
     # Launch the MuJoCo viewer
     with mujoco.viewer.launch_passive(mjmodel, mjdata) as viewer:
@@ -161,6 +155,7 @@ try:
     
         start = time.monotonic()
         home_cycle = 0
+        home_start = start
         last_step = start - CONTROL_PERIOD
         next_viewer = 0.0
         report_start = start
@@ -176,9 +171,11 @@ try:
                     target_gpos = init_gpos.copy()
                     target_gpos_last = init_gpos.copy()
                     home_cycle = 0
+                    home_done = False
+                    home_start = step_start
                     home_requested = False
                 home_cycle += 1
-                homing = home_cycle <= shared_control.STARTUP_HOME_CYCLES
+                homing = home_cycle <= shared_control.STARTUP_HOME_CYCLES or not home_done
                 for k, direction in ([] if homing else keys_pressed.items()):
                     position_idx = (key_to_joint_increase[k] if k in key_to_joint_increase
                                     else key_to_joint_decrease[k])
@@ -189,8 +186,10 @@ try:
                         target_gpos[position_idx] += increment * direction * dt / CONTROL_PERIOD
                 target_gpos = np.clip(target_gpos, control_glimit[0], control_glimit[1])
 
-            if home_cycle < shared_control.STARTUP_HOME_CYCLES:
-                rebot_right.Go_Home_Pose()
+            if home_cycle < shared_control.STARTUP_HOME_CYCLES or not home_done:
+                if step_start - home_start > HOME_TIMEOUT:
+                    raise TimeoutError("限速回中超时，停止控制并失能")
+                home_done = rebot_right.Go_Home_Pose(max_velocity=HOME_MAX_VELOCITY)
                 target_qpos = np.asarray(rebot_right.target_pose, dtype=float).copy()
             elif not homing:
                 # 仅在末端目标变化时求解，以上次接受的六轴目标为种子。
@@ -239,8 +238,17 @@ finally:
         try:
             # 正常关闭窗口才回中；异常/中断直接清理，不追加运动。
             if normal_exit:
-                for _ in range(shared_control.EXIT_HOME_CYCLES):
-                    rebot_right.Go_Home_Pose()
+                exit_start = time.monotonic()
+                for cycle in range(int(HOME_TIMEOUT / CONTROL_PERIOD)):
+                    step_start = time.monotonic()
+                    done = rebot_right.Go_Home_Pose(max_velocity=HOME_MAX_VELOCITY)
+                    if done and cycle + 1 >= shared_control.EXIT_HOME_CYCLES:
+                        break
+                    if step_start - exit_start >= HOME_TIMEOUT:
+                        raise TimeoutError("退出限速回中超时，失能")
+                    time.sleep(max(0.0, CONTROL_PERIOD - (time.monotonic() - step_start)))
+                else:
+                    raise TimeoutError("退出限速回中未完成，失能")
                 target_qpos = np.asarray(rebot_right.target_pose, dtype=float).copy()
         finally:
             try:

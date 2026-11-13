@@ -290,18 +290,17 @@ class MotorControl:
 
 
     def __process_set_param_packet(self, data, CANID, CMD):
-        if CMD == 0x11 and (data[2] == 0x33 or data[2] == 0x55):
+        if CMD == 0x11 and (data[2] in (0x33, 0x55, 0xAA)):
             masterid=CANID
             slaveId = ((data[1] << 8) | data[0])
-            if CANID==0x00:  #防止有人把MasterID设为0稳一手
-                masterid=slaveId
+            motor = self.motors_map.get(slaveId)
+            if motor is None or motor.SlaveID != slaveId or CANID not in (0, motor.MasterID):
+                return
+            masterid = slaveId
 
-            if masterid not in self.motors_map:
-                if slaveId not in self.motors_map:
-                    return
-                else:
-                    masterid=slaveId
-
+            if data[2] == 0xAA:
+                self.motors_map[masterid].temp_param_dict["flash_saved"] = data[3] == 0x01
+                return
             RID = data[3]
             # 读取参数得到的数据
             if is_in_ranges(RID):
@@ -396,10 +395,17 @@ class MotorControl:
         """
         can_id_l = Motor.SlaveID & 0xff #id low 8 bits
         can_id_h = (Motor.SlaveID >> 8)& 0xff  #id high 8 bits
-        data_buf = np.array([np.uint8(can_id_l), np.uint8(can_id_h), 0xAA, 0x00, 0x00, 0x00, 0x00, 0x00], np.uint8)
+        data_buf = np.array([np.uint8(can_id_l), np.uint8(can_id_h), 0xAA, 0x01, 0x00, 0x00, 0x00, 0x00], np.uint8)
         self.disable(Motor)  # before save disable the motor
+        self.recv_set_param_data()
+        Motor.temp_param_dict.pop("flash_saved", None)
         self.__send_data(0x7FF, data_buf)
-        sleep(0.001)
+        for _ in range(20):
+            sleep(0.05)  # 厂商规定 Flash 写入最长 30 ms。
+            self.recv_set_param_data()
+            if Motor.temp_param_dict.get("flash_saved"):
+                return
+        raise TimeoutError(f"电机 0x{Motor.SlaveID:02X} 未确认 Flash 保存；请勿启动控制")
 
     def change_limit_param(self, Motor_Type, PMAX, VMAX, TMAX):
         """
@@ -455,6 +461,8 @@ class MotorControl:
         """
         max_retries = 20
         retry_interval = 0.05  #retry times
+        self.recv_set_param_data()
+        Motor.temp_param_dict.pop(RID, None)
         self.__read_RID_param(Motor, RID)
         for _ in range(max_retries):
             sleep(retry_interval)
@@ -462,8 +470,6 @@ class MotorControl:
             if Motor.SlaveID in self.motors_map:
                 if RID in self.motors_map[Motor.SlaveID].temp_param_dict:
                     return self.motors_map[Motor.SlaveID].temp_param_dict[RID]
-                else:
-                    return None
         return None
 
     # -------------------------------------------------

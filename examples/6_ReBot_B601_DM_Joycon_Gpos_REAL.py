@@ -18,6 +18,7 @@ import numpy as np
 
 from ReBot_Kinematics import create_rebot_b601_dm, rebot_IK, rebot_FK, get_home_q
 from ReBot_SDK import ReBot
+from rebot_port import select_port
 
 ReBotCalibration = import_module("0_calibrate_rebot").ReBotCalibration
 JOINT_NAMES = ["joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
@@ -155,22 +156,13 @@ def run_control_loop(controller, duration_s=1000, after_step=None, should_stop=N
 
 
 def main():
-    import subprocess
-
     os.environ.setdefault("MUJOCO_GL", "egl")
     np.set_printoptions(linewidth=200)
+    arm_tty = select_port()
     controller = Example6Controller()
     arm = None
     normal_exit = False
     try:
-        arm_tty = None
-        for port in ("/dev/ttyACM0", "/dev/ttyACM1"):
-            result = subprocess.run(["udevadm", "info", "-a", "-n", port], capture_output=True, text=True)
-            if any("0000000" in line for line in result.stdout.splitlines() if "serial" in line):
-                arm_tty = port
-                break
-        if arm_tty is None:
-            raise RuntimeError("找不到ReBot机械臂驱动器，请重新拔插检查电源后重试")
         arm = ReBot(driver_port=arm_tty, arm_type="rebot_b601_dm", side="right")
         controller.attach(arm)
         run_control_loop(controller)

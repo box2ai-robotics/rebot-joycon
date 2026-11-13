@@ -12,7 +12,6 @@ PYTHON = ROOT.parent / ".venv/bin/python"
 
 # 按实际模型和设备修改这里。当前 100 步模型仅用于流程验证。
 POLICY_PATH = LEROBOT / "outputs/train/rebot_smoke/checkpoints/last/pretrained_model"
-CALIBRATION = ROOT.parent / "examples/calibration/rebot.json"
 PORT = "/dev/ttyACM0"
 CAMERA_INDEX = 0
 DEVICE = "cuda"
@@ -21,7 +20,7 @@ DURATION = 10
 
 
 def main() -> int:
-    required = [PYTHON, CALIBRATION] + [
+    required = [PYTHON] + [
         POLICY_PATH / name
         for name in (
             "config.json",
@@ -50,7 +49,6 @@ def main() -> int:
         "--robot.motor_family=dm",
         "--robot.control_backend=examples",
         "--robot.id=rebot",
-        f"--robot.software_calibration={CALIBRATION.resolve()}",
         f"--robot.cameras={json.dumps(cameras)}",
         f"--task={TASK}",
         "--fps=30",

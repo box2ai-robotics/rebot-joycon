@@ -92,6 +92,9 @@ key_to_joint_decrease = {
 # Dictionary to track currently pressed keys and their direction
 keys_pressed = {}
 
+homing = False
+HOME_MAX_VELOCITY = 0.35  # 七路按 0 回中目标速度 rad/s
+
 # Handle key press events
 def on_press(key):
     try:
@@ -103,12 +106,10 @@ def on_press(key):
             with lock:
                 keys_pressed[k] = -1  # Decrease direction
         elif k == "0":
-            # Reset to initial joint positions
-            print(f'{k=}')
             with lock:
-                global target_qpos
-                target_qpos = init_qpos.copy()
-        
+                global homing
+                homing = True
+
     except AttributeError:
         pass  # Handle special keys if necessary
 
@@ -138,12 +139,20 @@ try:
         viewer._key_callback = None
     
         start = time.time()
+        last_home_tick = time.monotonic()
         while viewer.is_running() and time.time() - start < 1000:
             step_start = time.time()
 
+            now = time.monotonic()
+            home_step = HOME_MAX_VELOCITY * np.clip(now - last_home_tick, 0.0, 0.02)
+            last_home_tick = now
             # Update target_qpos based on the keys currently pressed
             with lock:
-                for k, direction in keys_pressed.items():
+                returning_home = homing
+                if homing:
+                    target_qpos += np.clip(init_qpos - target_qpos, -home_step, home_step)
+                    homing = not np.allclose(target_qpos, init_qpos, atol=1e-6, rtol=0)
+                for k, direction in ([] if returning_home else keys_pressed.items()):
                     if k in key_to_joint_increase:
                         joint_idx = key_to_joint_increase[k]
                         if target_qpos[joint_idx] < control_qlimit[1][joint_idx]:

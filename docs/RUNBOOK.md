@@ -2,6 +2,12 @@
 
 本文保留历史验证证据，包含后来撤销的方案及当时的路径、章节编号。当前安装与运行请参阅[根目录说明](../README_zh.md)及[学习流程](../Learning_Model/README_zh.md)；历史日志仅保留在本地，不随仓库发布。
 
+## 2026-11-13：GitHub 发布整理
+
+按用户要求移出 `examples/test_*.py` 共 5 个开发测试文件，清除对应字节码缓存；LeRobot 子项目测试保留。移出前最近一轮 43 项离线回归全部通过。下文测试文件和 `unittest discover -s examples` 命令为历史记录，当前发布目录不再包含该测试集，不能用空测试发现结果作为验证通过。
+
+中英文 README 同步按 0 回中目标限速、启动/退出适用范围和超时说明；任务地图及研究记录移除失效测试链接。运行日志、虚拟环境、训练产物仍由现有 `.gitignore` 排除，不删除本地历史日志。本次仅整理文件与说明，未改控制代码，未连接真机，未提交或推送 GitHub。 13 个 examples 运行文件语法检查、更新文档本地链接检查及 `git diff --check` 通过；待上传文件未发现日志、环境缓存或超过 50 MiB 的文件。
+
 ## 2026-10-21：统一根目录 Python 环境
 
 按用户要求以 Learning_Model 为准，根依赖的 NumPy 从 `1.26.4` 改为 `>=2.0,<2.3`，与本地 LeRobot 声明一致。examples 和学习流程统一使用根目录 `.venv`；策略启动器及中英文 README 路径同步修改。学习依赖与根依赖在同一安装命令中解析；Joy-Con 包仍按需安装。旧 `.venv-rebot` 未删除。
@@ -253,3 +259,82 @@ uv run --no-project --python .venv-rebot/bin/python python -m pytest \
 按用户最新要求将 `examples/ReBot_SDK.py` 的 `GRIPPER_MAX_TORQUE_NM` 从 6.0 改为 3.0；真机 examples 4/5/6 与 Learning_Model 默认 examples 后端共用。滤波、反馈超时处理和校准不变，需重启控制进程生效。上文 6 N·m 记录为历史状态。
 
 离线验证：项目根 `.venv/bin/python -m unittest discover -s examples -p 'test_rebot_keyboard_real.py' -q`：21 项通过，覆盖双向 MIT 报文限幅及 10–100 Hz 响应。Learning_Model/lerobot 下 `uv run --no-project --python .venv-rebot/bin/python python -m pytest tests/teleoperators/test_rebot_example6.py -k actual_sdk_arguments_are_used_without_gain_reimplementation -q`：2 项通过、26 项未选，3 条既有第三方弃用警告；验证直接 SDK 与策略封装使用相同 3 N·m 上限。未连接真机。
+
+## 2026-11-13：第 7 路夹爪自动适配
+
+共享 SDK 连接时只读 PMAX/VMAX/TMAX，匹配 DM4310、DM4310_48V、DM4340、DM4340_48V 的既有量程表，并切换第 7 路报文编解码类型。依据量程匹配，不是读取硬件型号字符串；非标准量程停止连接。其他轴不变，不写电机参数或 Flash。适用于 4–6 和 LeRobot examples 后端。检测结果打印并写运行日志。
+
+读取接口修正为等待回复最多约 1 秒，并清除旧参数缓存；缺失或不匹配时关闭串口、不进入使能。夹爪保护仍为 `abs(measured) > 1.0`。
+
+离线验证：`.venv/bin/python -m unittest discover -s examples -p 'test_rebot_keyboard_real.py' -q`，25 项通过；覆盖四种量程匹配、正负 1.2 N·m 报文解码、其他轴保持原型号、缺失/NaN/未知量程退出、延迟回复与旧缓存失效。未连接真机，实际固件参数读回待实测。
+
+## 2026-11-13：硬件零位保存
+
+校准新增显式 `--hardware-zero` 与断电后只读 `--verify-hardware-zero`，完整步骤见根 README。原命令仍为软件校准。驱动 Flash 报文按厂商手册改为 `AA 01`，等待应答且保留至少 50 ms 写入时间；来源和限制见 [硬件零位研究](research/hardware_zero.md)。
+
+`.venv/bin/python -m unittest discover -s examples -p test_hardware_zero.py -q`：4 项通过。仅模拟串口，未操作硬件；本轮保留用户新采集的校准文件，未尝试启动 REAL 程序。
+
+### 同日更新：默认硬件校准
+
+用户明确选择电机内部零位及断电保存，0 号无选项命令现在默认执行七路硬件置零和 Flash 保存，覆盖上一条“原命令仍为软件校准”的说明；`--hardware-zero` 保留为可省略的显式参数。`--verify-hardware-zero` 仍提前返回，不执行硬件写入或本地覆盖。测试将成功路径改为无选项调用，4 项离线测试通过；用户现有校准数据未修改，未操作真机。
+
+## 2026-11-13：移除 examples 本地软件标定
+
+按用户要求删除 `examples/calibration/rebot.json`、`rebot.encoders.json` 及该目录下旧备份，移除 0 号的 JSON 读取、输出和备份代码。0 号默认仍将七路当前位置置零并保存 Flash，置零前后读数保留在运行日志；不生成本地标定文件。本文此前提到的备份和本地校准更新均为历史行为。
+
+1–3 号仿真使用固定硬件零位坐标；4–6 号 SDK 不再对位置反馈/目标加减软件零偏。保留固定 ID、方向、行程定义，夹爪闭合 0、张开 -270°。LeRobot examples 配置、Joy-Con 配对及策略启动入口取消 JSON 参数；原独立 MotorBridge 后端的软件校准支持不在此次清理范围内。
+
+验证：根 `.venv/bin/python -m unittest discover -s examples -p 'test_*.py' -q`：31 项通过，覆盖无文件启动模型/SDK、键盘开合和回中、硬件置零/核验/Flash 应答、反馈保护和日志。修改后的 LeRobot 配置类及配对函数单独抽取实际源码离线执行通过，确认无需文件及回中延迟标志保留；Python AST 和 `git diff --check` 通过。
+
+完整 `test_rebot_example6.py` 未运行成功：原 `.venv-rebot` 不存在；根环境缺 pytest，通过 `uv --with pytest` 临时提供后，设置 `PYTHONPATH=src`，收集仍被缺少 `torch` 阻塞。未安装训练依赖、未操作真机。
+
+## 2026-11-13：夹爪与 Flash 零位全面检查（未修复发现项）
+
+范围：examples 0–6、共享 SDK/CAN、夹爪保护、LeRobot examples/历史 MotorBridge 分支、启动脚本、当前文档及相关测试。只读检查与离线模拟，未连接设备、未改生产代码。
+
+### 已完成且核对通过
+
+- 0 号默认七路失能、置零、核验、逐路 Flash 保存和再次核验；`--verify-hardware-zero` 提前返回，只读。examples/calibration 已不存在，0 号不再读写标定 JSON。
+- 1–3 为固定硬件零位坐标下的仿真；4–6 SDK 发送/反馈均不加减软件零偏。夹爪闭合 0、张开 -270°。
+- SDK 对第 7 路读取 PMAX/VMAX/TMAX 并匹配 4310/4340 及 48V 版本；匹配失败关闭串口。MIT 编解码共用匹配结果。绝对力矩超过 1 N·m 保护、反向卸力及回中路径保留。
+- 自动适配仅限第 7 路 SDK 报文量程，不代表七路型号、机械传动、方向、行程或增益全自动识别。Kp=2/Kd=1、回中 Kp=1.6 和行程仍固定。
+
+### 发现项（按影响排序）
+
+1. **高：Flash 应答可能误判。** `examples/Motor_CAN.py:292` 的参数解析仅看 CAN 主机 ID 和数据第 3/4 字节，不核对 payload 内的 slave ID。离线向 `_MotorControl__process_set_param_packet` 输入普通状态形状 `07 80 AA 01 80 00 1E 1E`、CANID=23、CMD=0x11，对 SlaveID=7 的对象会置 `flash_saved=True`；这里 payload 前两字节是 0x8007，并非应答要求的 7。因而保存应答提示本身不能完全排除误判。此为模拟可复现缺陷，不表示用户此前实机保存已经失败；断电同姿态核验仍必要。建议严格验证参数应答目标 ID，并补状态/参数混流回归。
+2. **高：LeRobot auto 默认不覆盖新流程。** `config_rebot_b601_follower.py:93` 仍按 software_calibration 是否存在选择后端。无文件参数时选 MotorBridge，DM profile 夹爪仍固定 4310，不走 SDK 自动适配；有旧文件参数时又被 examples 的新校验拒绝。离线实际配置类复现 `control_backend=motorbridge`、gripper model=4310。当前 README/策略脚本显式传 `control_backend=examples`，这些路径不受此默认选择问题影响。
+3. **中：旧置零入口残留。** `examples/ReBot_SDK.py:180` 的 `Arm_Zero_Setting` 仍逐轴 input 后只发 set_zero_position，没有新流程的 Flash 应答和核验。当前 0–6 主程序未调用它，但公开方法与统一标定流程不一致。
+4. **中：旧测试依赖已删除文件。** `Learning_Model/lerobot/tests/teleoperators/test_joycon.py:20` 及多个 fixture 仍引用 examples/calibration/rebot.json；这些是历史 MotorBridge 分支测试，应改用临时测试夹具而非恢复运行时标定文件。
+5. **中：子项目操作文档未同步。** `Learning_Model/lerobot/docs/REBOT_JOYCON.md:22`、49–61、128–138 等仍要求旧 JSON 和 software_calibration 参数，按文档执行会碰到文件缺失/新配置拒绝。历史 RUNBOOK 记录不作为现行指令。
+
+### 边界与验证
+
+0 号仍以 4310 对象读取夹爪位置，没有自动量程识别；在当前表中 4310/4340 的 PMAX 都为 12.5，故不影响标准量程下的位置置零/核验，不应把它说成全部型号自动适配。若 PMAX 被用户改写则需额外适配。独立 MotorBridge 的旧软件标定及固定型号代码仍保留，不属于已统一的 examples 后端。
+
+本轮根 unittest：31 项通过（2.066 秒）；另外离线复现以上应答误判和 auto 后端问题。31 项现有测试未覆盖这些缺陷，不能据此推断所有入口无遗漏。LeRobot 全量测试环境仍缺 torch；仅对实际配置类做隔离执行。日志中未发现用户断电后的只读核验通过记录，这不证明用户没有断电，只说明当前证据不足以确认断电保持。
+
+## 2026-11-13：审查项修复及设备绑定完成记录
+
+已处理上一节 5 项：参数应答核对 payload 的 SlaveID 与 CAN MasterID，拒绝状态误包和串轴；DM auto 默认 examples；旧 SDK `Arm_Zero_Setting` 提示使用统一 0 号，旧 DM MotorBridge 实机连接拒绝绕过；test_joycon 使用独立临时 JSON 夹具，MotorBridge 算法测试使用 fake bus 而非实际连接；子项目 REBOT_JOYCON 文档及命令更新。
+
+新增 `examples/calibration_record.py`：读取 CAN USB 序列号/VID/PID 与七路电机 SN（RID=15），拒绝缺失、无效或重复 SN。通用 CAN 串号 0000000 不单独作为机械臂身份。0 号在写零前撤销当前身份的旧记录，全部 Flash 应答和零位检查成功后原子写入 `examples/calibration_records/<身份摘要>.json`，记录版本、设备身份、完成状态/时间、核验状态，不包含软件零偏。核验选项不写电机，只更新记录；位置核验失败撤销记录。身份读回或文件写入失败不会生成可用完成记录。
+
+SDK 在任何使能/运动前核对真实身份及完成记录。新设备、无记录、记录损坏/身份不符均关闭串口并提示先校准。4–6 不再用硬编码 0000000/ACM0/ACM1 定位设备，而是按完成记录选择唯一 USB-CAN；多设备可用 REBOT_PORT 显式选择，SDK 仍核对电机 SN。LeRobot 有显式 port，复用同一 SDK 准入。1–3 仿真不要求设备记录。记录目录被 .gitignore 排除，Git 不包含有效设备身份。未连接真机，没有生成真实完成记录。
+
+验证：根 `.venv/bin/python -m unittest discover -s examples -p 'test_*.py' -q`：40 项通过，覆盖全部实机脚本模拟循环、量程适配、正负力矩保护、Flash 混流应答、重标定失败撤销记录、同通用 CAN 串号不同电机拒绝、无效记录/缺失 SN、未校准禁止使能、唯一/多设备串口选择、旧入口阻断，以及从真实源码隔离执行 LeRobot DM/RS 默认配置和连接准入方法。Ruff F821、修改 Python AST、Git 空白检查通过。
+
+复查 Git 全部已跟踪改动及新增文件：旧零偏 JSON 的删除是前轮已授权清理；新增的是本地状态管理代码和离线测试，实际运行记录不提交。完整 LeRobot pytest 仍因当前环境没有 torch 无法收集，不把隔离测试当作完整集成测试；实机 SN 读回、Flash 持久性待现场核验。
+
+## 2026-11-13：按用户要求撤销本地完成记录准入
+
+用户实机 6 号在 select_port 报“未找到唯一已校准 CAN”。根因是新增的本地完成记录筛选，不能据此判断电机 Flash 校准丢失。最新要求覆盖此前 CAN/SN 记录准入要求：统一使用电机内部零位。
+
+删除 calibration_record.py 及专属记录测试，SDK 不再读取身份/SN或本地记录；0 号不再生成/校验记录，仍默认写七路零点和 Flash，核验选项只读反馈。新的 rebot_port.py 从实时设备列表选唯一 ACM/USB 串口，多设备使用 REBOT_PORT 指定，不依赖文件或 USB 串号。6 号先选串口再初始化 Joy-Con。LeRobot DM 仍通过共享 SDK 使用相同硬件坐标。旧 DM 后端阻断、Flash 应答目标校验、夹爪量程适配与 1 N·m 反馈保护保持。此前记录目录若存在仅是历史文件，不再参与运行。
+
+验证：根 unittest 37 项通过，覆盖无文件/无 USB SN 的单串口选择、多设备拒绝和显式串口、0 号只读核验及无文件写入、4–6 模拟生命周期、SDK 四种夹爪量程和反馈保护。所有新增/修改 Python 的 AST、Ruff F821、git diff --check 通过；全源码搜索无 calibration_record/read_identity/require_record 残留。未连接真机；完整 LeRobot pytest 仍受缺少 torch 限制。软件不能仅凭任意姿态反馈识别是否正确完成机械姿态标定，新机械臂建议先用 0 号校准，但不再用本地文件阻止已校准设备启动。
+
+## 2026-11-13：按 0 回中限速
+
+1/2 仿真、4/5 真机的按 0 回中采用七路 0.35 rad/s 目标插补（单步时间最多 20 ms），保留原初始姿态含义，不改成七个关节全为 0。5 号启动、正常退出也接入限速；4 号启动/退出维持原行为。3/6 没有键盘 0 分支。SDK 限速为可选参数，其他调用默认不变；夹爪反馈保护保留。真机限速目标未完成则继续回中，30 秒超时失能；目标插补完成不代表反馈已到位，也不是驱动硬速度限幅。
+
+验证：`.venv/bin/python -m unittest discover -s examples -p 'test_*.py' -q`，43 项通过。模拟键盘、窗口和串口，覆盖仿真连续回中、真机三条回中路径、七路目标速度、长停顿、夹爪受阻、超时清理。未连接或运行真机。

@@ -1,10 +1,12 @@
-﻿# Rebot-Joycon
+# Rebot-Joycon
 
 [English](README.md) | [简体中文](README_zh.md) · [MIT 协议](LICENSE)
 
 使用 Joy-Con 控制机器人，为具身智能采集数据的代码库。
 
 支持 **reBot B601-DM** 的键盘及右 Joy-Con 控制，可运行 MuJoCo 仿真或连接真机。数据采集、ACT 训练与推理见 [Learning_Model](Learning_Model/README_zh.md)。
+
+本次更新：夹爪电机型号自适应、回零减速、校准零位写入电机。
 
 ## 安装
 
@@ -28,15 +30,13 @@ git clone https://github.com/box2ai-robotics/joycon-robotics.git joycon-robotics
 
 ## 零位校准与使用
 
-需要重新校准时，将机械臂摆到机械零位、夹爪完全闭合：
+将机械臂摆到图示机械零位、夹爪完全闭合后运行校准，程序会将七路电机零位烧录到电机 Flash，断电后保留。
 
 <img src="docs/images/b601dm_zeroposition.jpg" alt="机械零位，夹爪完全闭合" width="50%">
 
 ```bash
 .venv/bin/python examples/0_calibrate_rebot.py --port /dev/ttyACM0
 ```
-
-脚本只读取反馈，不使能、不发运动指令。[examples/calibration](examples/calibration) 下的 `rebot.json` 和 `rebot.encoders.json` 须一起保留，与 LeRobot 共用，校准值须适用于你的机械臂。
 
 ## 运行
 
@@ -87,7 +87,7 @@ git clone https://github.com/box2ai-robotics/joycon-robotics.git joycon-robotics
 
 ### 真机示例
 
-运行前确认[零位校准与使用](#零位校准与使用)中的校准文件适用于当前机械臂。**4–6 号启动即使能并发送回中目标（TCP Z=0.25 m、夹爪闭合）。** 串口按序列号 `0000000` 自动匹配 `/dev/ttyACM0` 或 `/dev/ttyACM1`，需有串口权限。
+运行前确认[零位校准与使用](#零位校准与使用)中的硬件置零及断电核验已完成。**4–6 号完成型号和反馈检查后使能并发送回中目标（TCP Z=0.25 m、夹爪闭合）。** 串口自动选择唯一 `/dev/ttyACM*` 或 `/dev/ttyUSB*`；多设备时用 `REBOT_PORT=/dev/ttyACM0` 指定。需有串口权限。
 
 #### 4. 键盘关节控制（qpos）
 
@@ -119,7 +119,7 @@ git clone https://github.com/box2ai-robotics/joycon-robotics.git joycon-robotics
 
 | 路径 | 用途 |
 | --- | --- |
-| `examples/` | 0–6 号示例、共享 SDK、运动学、电机通信、保护及测试。 |
+| `examples/` | 0–6 号示例、共享 SDK、运动学、电机通信、保护。 |
 | `URDF/` | 机械臂模型、网格及验证记录。 |
 | `joycon-robotics/` | 可选手柄依赖，Git 忽略上传。 |
 | `Learning_Model/` | 适配的 LeRobot、数据采集、ACT 训练与推理。 |
@@ -130,7 +130,5 @@ git clone https://github.com/box2ai-robotics/joycon-robotics.git joycon-robotics
 ## 自动运行日志
 
 示例 0–6 和 SDK 真机连接自动保留终端及事件日志。真机夹爪反馈绝对力矩超过 1 N·m 时收回目标、锁存受阻方向，允许反向卸力；这不是电机总力矩硬限幅。仿真无电机力矩反馈。
-
-离线检查：`.venv/bin/python -m unittest discover -s examples -p 'test_*.py' -q`。
 
 第三方代码与模型保留各自许可证。`Learning_Model/lerobot` 已作为普通源码目录收录，基于 [LeRobot 提交 53feaef](https://github.com/huggingface/lerobot/commit/53feaef37b67e8f4c23b6953e880ff535e39d6fe) 并保留本地 reBot/Joy-Con 适配，不能直接替换成未修改的上游版本。

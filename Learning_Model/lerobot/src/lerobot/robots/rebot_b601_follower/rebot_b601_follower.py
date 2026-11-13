@@ -197,6 +197,8 @@ class RebotB601Follower(Robot):
 
     @check_if_already_connected
     def connect(self, calibrate: bool = True) -> None:
+        if self.config.motor_family is MotorFamily.DM and self.config.control_backend != "examples":
+            raise ValueError("DM hardware requires control_backend=examples for motor Flash zero and automatic gripper range detection")
         if self.config.control_backend == "examples":
             module = load_example6(self.config.examples_path)
             logger.info("reBot backend: shared example 6 at %s (original ReBot_SDK/Motor_CAN)", module.__file__)
@@ -299,9 +301,14 @@ class RebotB601Follower(Robot):
 
     @property
     def is_calibrated(self) -> bool:
+        if self.config.control_backend == "examples":
+            return self._example_sdk is not None  # Shared SDK connected using motor Flash zero.
         return self._software_calibration is not None or bool(self.calibration)
 
     def calibrate(self) -> None:
+        if self.config.control_backend == "examples":
+            logger.info("Using motor Flash zero; calibrate with examples/0_calibrate_rebot.py")
+            return
         if self._software_calibration is not None:
             logger.info("Using example software calibration: %s", self._software_calibration.path)
             return

@@ -93,9 +93,17 @@ def _connected(motor_family, *, positions_deg=None, **config_kwargs):
         # differently; both resolve to the same mock here.
         controller_cls.from_dm_serial.return_value = bus_mock
         controller_cls.return_value = bus_mock
-        config = RebotB601FollowerRobotConfig(motor_family=motor_family, port="/dev/null", **config_kwargs)
+        config = RebotB601FollowerRobotConfig(control_backend="motorbridge", motor_family=motor_family, port="/dev/null", **config_kwargs)
         robot = RebotB601Follower(config)
-        robot.connect(calibrate=False)
+        if motor_family is MotorFamily.DM:
+            # Exercise legacy control math with fake motors only; the public DM
+            # MotorBridge connect is intentionally blocked by the identity gate.
+            robot.bus = bus_mock
+            robot.motors = {name: bus_mock.add_damiao_motor(send_id, recv_id, robot.profile.motor_models[name])
+                            for name, (send_id, recv_id) in robot._motor_can_ids.items()}
+            robot.configure()
+        else:
+            robot.connect(calibrate=False)
         try:
             yield robot
         finally:
@@ -106,7 +114,7 @@ def _connected(motor_family, *, positions_deg=None, **config_kwargs):
 def _build(motor_family, **config_kwargs) -> RebotB601Follower:
     with patch(f"{_MODULE}.require_package", lambda *a, **kw: None):
         return RebotB601Follower(
-            RebotB601FollowerRobotConfig(motor_family=motor_family, port="/dev/null", **config_kwargs)
+            RebotB601FollowerRobotConfig(control_backend="motorbridge", motor_family=motor_family, port="/dev/null", **config_kwargs)
         )
 
 
@@ -125,7 +133,7 @@ def test_features_match_joints(family):
 
 
 def test_shipped_dm_defaults_are_preserved():
-    config = RebotB601FollowerRobotConfig(port="/dev/null")
+    config = RebotB601FollowerRobotConfig(control_backend="motorbridge", port="/dev/null")
 
     assert config.can_adapter == "damiao"
     assert config.control_mode is ArmControlMode.MIT
@@ -145,14 +153,14 @@ def test_shipped_dm_defaults_are_preserved():
 
 
 def test_dm_joint_limits_match_leader_ranges():
-    follower = RebotB601FollowerRobotConfig(port="/dev/null")
+    follower = RebotB601FollowerRobotConfig(control_backend="motorbridge", port="/dev/null")
     leader = RebotArm102LeaderConfig(port="/dev/null")
 
     assert follower.joint_limits == {joint: tuple(limits) for joint, limits in leader.joint_ranges.items()}
 
 
 def test_scalar_joint_tuning_applies_to_every_joint():
-    config = RebotB601FollowerRobotConfig(
+    config = RebotB601FollowerRobotConfig(control_backend="motorbridge",
         port="/dev/null",
         mit_kp=6.0,
         mit_kd=0.2,
@@ -170,7 +178,7 @@ def test_named_joint_tuning_is_preserved():
     kd = {joint: index / 10 for index, joint in enumerate(JOINT_NAMES, start=1)}
     velocity = {joint: float(index * 100) for index, joint in enumerate(JOINT_NAMES, start=1)}
 
-    config = RebotB601FollowerRobotConfig(
+    config = RebotB601FollowerRobotConfig(control_backend="motorbridge",
         port="/dev/null",
         mit_kp=kp,
         mit_kd=kd,
@@ -183,7 +191,7 @@ def test_named_joint_tuning_is_preserved():
 
 
 def test_named_joint_tuning_overrides_profile_defaults():
-    config = RebotB601FollowerRobotConfig(
+    config = RebotB601FollowerRobotConfig(control_backend="motorbridge",
         port="/dev/null",
         mit_kp={"gripper": 5.0},
     )
@@ -194,7 +202,7 @@ def test_named_joint_tuning_overrides_profile_defaults():
 @pytest.mark.parametrize(("family", "profile"), [(MotorFamily.DM, DM_PROFILE), (MotorFamily.RS, RS_PROFILE)])
 def test_named_joint_limits_override_profile_defaults(family, profile):
     gripper_limits = (-180.0, 0.0)
-    config = RebotB601FollowerRobotConfig(
+    config = RebotB601FollowerRobotConfig(control_backend="motorbridge",
         motor_family=family,
         port="/dev/null",
         joint_limits={"gripper": gripper_limits},
@@ -204,7 +212,7 @@ def test_named_joint_limits_override_profile_defaults(family, profile):
 
 
 def test_explicit_config_values_are_passed_through():
-    config = RebotB601FollowerRobotConfig(
+    config = RebotB601FollowerRobotConfig(control_backend="motorbridge",
         motor_family=MotorFamily.RS,
         port="/dev/ttyACM0",
         can_adapter="damiao",
@@ -219,7 +227,7 @@ def test_explicit_config_values_are_passed_through():
 
 
 def test_rs_defaults_are_selected():
-    config = RebotB601FollowerRobotConfig(motor_family=MotorFamily.RS, port="can0")
+    config = RebotB601FollowerRobotConfig(control_backend="motorbridge", motor_family=MotorFamily.RS, port="can0")
     assert config.can_adapter == "socketcan"
     assert config.gripper_control_mode == "mit_impedance"
     assert config.motor_can_ids == RS_PROFILE.motor_can_ids
@@ -244,7 +252,7 @@ def test_rs_defaults_are_selected():
 )
 def test_control_modes_reject_values_for_the_wrong_motor_group(config_kwargs, mode_type):
     with pytest.raises(ValueError, match=mode_type):
-        RebotB601FollowerRobotConfig(port="/dev/null", **config_kwargs)
+        RebotB601FollowerRobotConfig(control_backend="motorbridge", port="/dev/null", **config_kwargs)
 
 
 @pytest.mark.parametrize(
@@ -266,8 +274,14 @@ def test_connect_uses_the_configured_transport(family, adapter, uses_serial_brid
         controller_cls.return_value = bus
         kwargs = {} if adapter is None else {"can_adapter": adapter}
         robot = RebotB601Follower(
-            RebotB601FollowerRobotConfig(motor_family=family, port="/dev/null", **kwargs)
+            RebotB601FollowerRobotConfig(control_backend="motorbridge", motor_family=family, port="/dev/null", **kwargs)
         )
+        if family is MotorFamily.DM:
+            with pytest.raises(ValueError, match="control_backend=examples"):
+                robot.connect(calibrate=False)
+            controller_cls.from_dm_serial.assert_not_called()
+            controller_cls.assert_not_called()
+            return
         robot.connect(calibrate=False)
 
         if uses_serial_bridge:
@@ -284,7 +298,7 @@ def test_connect_uses_the_configured_transport(family, adapter, uses_serial_brid
 def test_connect_rejects_unknown_can_adapter():
     robot = _build(MotorFamily.DM, can_adapter="unknown")
 
-    with pytest.raises(ValueError, match="Unsupported can_adapter 'unknown'"):
+    with pytest.raises(ValueError, match="control_backend=examples"):
         robot.connect(calibrate=False)
 
 
@@ -309,7 +323,7 @@ def test_missing_mode_tuning_fails_before_opening_hardware(family, config_kwargs
         controller_cls.from_dm_serial.return_value = bus
         controller_cls.return_value = bus
         robot = RebotB601Follower(
-            RebotB601FollowerRobotConfig(
+            RebotB601FollowerRobotConfig(control_backend="motorbridge",
                 motor_family=family,
                 port="/dev/null",
                 **config_kwargs,
@@ -553,8 +567,8 @@ def test_bimanual_accepts_per_arm_motor_families():
         robot = BiRebotB601Follower(
             BiRebotB601FollowerConfig(
                 id="pair",
-                left_arm_config=RebotB601FollowerConfig(motor_family=MotorFamily.DM, port="/dev/null0"),
-                right_arm_config=RebotB601FollowerConfig(
+                left_arm_config=RebotB601FollowerConfig(control_backend="motorbridge", motor_family=MotorFamily.DM, port="/dev/null0"),
+                right_arm_config=RebotB601FollowerConfig(control_backend="motorbridge",
                     motor_family=MotorFamily.RS,
                     port="can0",
                     max_relative_target=5.0,
@@ -654,7 +668,7 @@ def test_all_gripper_modes_disable_on_missing_feedback(mode: str, missing_field:
 @pytest.mark.parametrize("limit", [0.0, -1.0, float("nan"), float("inf")])
 def test_dm_mit_gripper_rejects_invalid_limit(limit):
     with pytest.raises(ValueError, match="gripper_torque_limit"):
-        RebotB601FollowerRobotConfig(port="/dev/null", gripper_control_mode="mit", gripper_torque_limit=limit)
+        RebotB601FollowerRobotConfig(control_backend="motorbridge", port="/dev/null", gripper_control_mode="mit", gripper_torque_limit=limit)
 
 
 @pytest.mark.parametrize("family", [MotorFamily.DM, MotorFamily.RS])
@@ -676,3 +690,10 @@ def test_dm_force_pos_uses_updated_limit():
     with _connected(MotorFamily.DM) as robot:
         robot.send_action({"gripper.pos": -270.0})
         assert robot.motors["gripper"].send_force_pos.call_args.args[2] == 0.3
+
+
+def test_default_dm_uses_identity_checked_examples_backend():
+    config = RebotB601FollowerRobotConfig(port="/dev/null")
+    assert config.control_backend == "examples"
+    assert config.software_calibration is None
+    assert config.mit_kp is None  # Shared SDK owns gains and motor detection.

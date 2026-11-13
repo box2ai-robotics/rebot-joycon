@@ -17,7 +17,7 @@ from lerobot.teleoperators.joycon.example6_runtime import Example6Runtime
 from lerobot.teleoperators.joycon.teleop_joycon import validate_joycon_robot
 from lerobot.utils.rebot_example6 import load_example6
 
-CALIBRATION = Path(__file__).resolve().parents[4] / "examples/calibration/rebot.json"
+CALIBRATION = None  # Hardware Flash zero; no calibration JSON.
 
 
 class FakeArm:
@@ -154,7 +154,7 @@ def test_gripper_finishes_both_directions_during_continuous_failed_ik(example):
 def test_default_uses_original_sdk_and_sampling_does_not_resend(example, tmp_path):
     module, controller, _ = example
     config = RebotB601FollowerRobotConfig(
-        port="/dev/null", software_calibration=CALIBRATION, calibration_dir=tmp_path
+        port="/dev/null", control_backend="examples", software_calibration=CALIBRATION, calibration_dir=tmp_path
     )
     robot = RebotB601Follower(config)
     assert config.control_backend == "examples"
@@ -463,7 +463,7 @@ def test_record_two_camera_episodes_with_example6_main_loop(example, tmp_path, v
 
     camera.read_latest.side_effect = read_image
     robot_config = RebotB601FollowerRobotConfig(
-        port="/dev/null", software_calibration=CALIBRATION, calibration_dir=tmp_path,
+        port="/dev/null", control_backend="examples", software_calibration=CALIBRATION, calibration_dir=tmp_path,
         cameras={"front": OpenCVCameraConfig(index_or_path=0, width=64, height=64, fps=30)},
     )
     with patch(
@@ -544,7 +544,7 @@ def test_default_teleop_attaches_same_example_and_stops(example, tmp_path, backg
     teleop = JoyconTeleop(JoyconTeleopConfig(software_calibration=CALIBRATION, calibration_dir=tmp_path))
     robot = RebotB601Follower(
         RebotB601FollowerRobotConfig(
-            port="/dev/null", software_calibration=CALIBRATION, calibration_dir=tmp_path
+            port="/dev/null", control_backend="examples", software_calibration=CALIBRATION, calibration_dir=tmp_path
         )
     )
     validate_joycon_robot(teleop, robot)
@@ -564,7 +564,7 @@ def test_default_teleop_attaches_same_example_and_stops(example, tmp_path, backg
 def test_refuses_old_extra_limits(tmp_path):
     with pytest.raises(ValueError, match="remove max_relative_target"):
         RebotB601FollowerRobotConfig(
-            port="/dev/null", software_calibration=CALIBRATION, max_relative_target=5
+            port="/dev/null", control_backend="examples", software_calibration=CALIBRATION, max_relative_target=5
         )
     teleop = JoyconTeleop(
         JoyconTeleopConfig(software_calibration=CALIBRATION, gripper_speed_rad_s=1, calibration_dir=tmp_path)
@@ -581,7 +581,7 @@ def test_partial_camera_connect_failure_closes_sdk(example, tmp_path):
     camera.is_connected = False
     camera.connect.side_effect = RuntimeError("camera unavailable")
     config = RebotB601FollowerRobotConfig(
-        port="/dev/null", software_calibration=CALIBRATION, calibration_dir=tmp_path
+        port="/dev/null", control_backend="examples", software_calibration=CALIBRATION, calibration_dir=tmp_path
     )
     with patch(
         "lerobot.robots.rebot_b601_follower.rebot_b601_follower.make_cameras_from_configs",
@@ -606,7 +606,7 @@ def test_actual_sdk_arguments_are_used_without_gain_reimplementation(tmp_path, r
     sdk.MotorController = MagicMock()
     robot = RebotB601Follower(
         RebotB601FollowerRobotConfig(
-            port="/dev/null", software_calibration=CALIBRATION, calibration_dir=tmp_path
+            port="/dev/null", control_backend="examples", software_calibration=CALIBRATION, calibration_dir=tmp_path
         )
     )
     robot._example_sdk = sdk
@@ -661,7 +661,7 @@ def test_examples_robot_returns_protected_action(tmp_path):
     sdk.Motors = list(range(7))
     sdk.MotorController = MagicMock()
     robot = RebotB601Follower(RebotB601FollowerRobotConfig(
-        port="/dev/null", software_calibration=CALIBRATION, calibration_dir=tmp_path))
+        port="/dev/null", control_backend="examples", software_calibration=CALIBRATION, calibration_dir=tmp_path))
     robot._example_sdk = sdk
     sdk.motors_pose[6] = -.5
     action = dict(zip(
@@ -706,7 +706,7 @@ def test_joycon_uses_protected_target_as_next_ramp_origin(example):
 def test_examples_config_roundtrip_does_not_materialize_legacy_motor_tuning():
     import draccus
 
-    config = RebotB601FollowerRobotConfig(port="/dev/null", software_calibration=CALIBRATION)
+    config = RebotB601FollowerRobotConfig(port="/dev/null", control_backend="examples", software_calibration=CALIBRATION)
     restored = draccus.decode(RebotB601FollowerRobotConfig, draccus.encode(config))
     assert restored.control_backend == "examples"
     assert restored.mit_kp is None and restored.mit_kd is None
@@ -753,7 +753,7 @@ def test_real_sdk_home_after_slow_camera_initialization(tmp_path):
         assert sdk.Motors[6].feedback_time >= 103.015
     sdk.MotorController.controlMIT.side_effect = send
     config = RebotB601FollowerRobotConfig(
-        port="/dev/null", software_calibration=CALIBRATION, calibration_dir=tmp_path
+        port="/dev/null", control_backend="examples", software_calibration=CALIBRATION, calibration_dir=tmp_path
     )
     with patch(
         "lerobot.robots.rebot_b601_follower.rebot_b601_follower.make_cameras_from_configs",

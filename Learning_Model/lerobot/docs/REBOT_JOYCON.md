@@ -19,14 +19,14 @@
 ## 坐标、校准和控制行为
 
 - 动作/状态顺序固定：`shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_yaw, wrist_roll, gripper`，键名带 `.pos`，七项均为 **度**。运动学内部使用 **m/rad**。
-- `--robot.software_calibration` 指向 `0_calibrate_rebot.py` 生成的 `rebot.json`；同目录必须存在 `rebot.encoders.json`。前六轴从原始反馈扣零偏，发送时加回；夹爪保留电机角。方向和端点也从该文件读取。记录和策略推理必须使用同一标定；建议随数据集保存当时使用的两份标定文件。
-- 指定软件校准后，Robot 的校准步骤只复用文件，不写电机硬件零位；不指定该参数则仍沿用原 LeRobot 驱动行为。软件校准目前仅支持 B601-DM。
-- 默认 `robot.control_backend=examples`、`teleop.use_example6=true`：直接加载外层 `6_ReBot_B601_DM_Joycon_Gpos_REAL.py::Example6Controller`，该脚本导入时不连接设备；其 `main()` 仍提供原示例窗口。SDK 增加可选 `calibration_path`，默认行为不变。
-- 同一 SDK 负责电机类型、MIT 编码/收发、零偏、增益衰减和限位；LeRobot 不再重复实现这些逻辑。手柄所有显式/隐式参数、MuJoCo 模型、两次步进、IK 种子、前 40 轮回中切换均来自示例 6。完整参数表见 [主操作说明](../../README.md#3-校准文件与真机遥操)。
+- 0 号将七路机械零位写入电机 Flash；运行直接使用电机内部零位，不再要求本地完成记录、CAN/SN 绑定文件或软件偏移文件。
+- 新机械臂建议先按规定机械姿态校准；已有硬件零位无需为生成本地文件再次校准。断电后可在同姿态执行 `--verify-hardware-zero`，仅查询电机，不写文件。
+- DM 的 `auto` 默认选择 `examples`，直接加载外层示例 6 和共享 SDK。`software_calibration` 必须省略；显式旧 DM MotorBridge 连接被拒绝，实机统一使用共享 SDK 的硬件零位和夹爪适配。RS 后端不受影响。
+- 同一 SDK 负责电机类型、MIT 编码/收发、硬件零位、增益衰减和限位；LeRobot 不再重复实现这些逻辑。手柄所有显式/隐式参数、MuJoCo 模型、两次步进、IK 种子、前 40 轮回中切换均来自示例 6。完整参数表见 [主操作说明](../../README.md#3-校准文件与真机遥操)。
 - `Example6Runtime` 以示例的 0.001 s 目标间隔运行独立控制线程；LeRobot 30 Hz 仅采样状态/相机和已发送动作，不再次发命令。实际频率受计算/串口影响；LeRobot 不显示 MuJoCo 窗口，保留全部仿真步进。
-- 手柄、Robot 必须使用相同的 `software_calibration` 与 `examples_path`。部署要保留外层 `examples`、`URDF` 和本地手柄库；新默认不再只依赖包内运动学副本。
+- 手柄、Robot 必须使用相同的 `examples_path`。部署保留外层 `examples`、`URDF` 和手柄库。不需要设备完成记录。
 - 正常结束先停止控制线程，再按示例回中 100 次并失能；异常停止不追加回中。A/Y 上升沿由独立线程缓存，采集循环消费，短按不再依赖 30 Hz 的瞬间采样。Y 只丢弃未保存缓冲段。
-- 历史 MotorBridge 路径仅在显式 `robot.control_backend=motorbridge`、`teleop.use_example6=false` 时使用，其运动学副本及旧参数仍保留，但不视为示例 6 的完整复现。
+- 历史 MotorBridge 算法只保留独立测试；DM 实机统一走 examples。其他电机系列仍可使用 MotorBridge。
 
 ## 安装
 
@@ -46,7 +46,6 @@ source .venv-rebot/bin/activate
 连接右 Joy-Con，确认串口与相机索引。下面相机 `0` 是配置示例，需按实际设备修改。命令会使能并控制真机，应在准备好机械臂后由操作者执行。
 
 ```bash
-REBOT_CALIBRATION="$(realpath ../../examples/calibration/rebot.json)"
 
 python -m lerobot.scripts.lerobot_record \
   --robot.type=rebot_b601_follower \
@@ -54,11 +53,9 @@ python -m lerobot.scripts.lerobot_record \
   --robot.motor_family=dm \
   --robot.control_backend=examples \
   --robot.id=rebot \
-  --robot.software_calibration="$REBOT_CALIBRATION" \
   --robot.cameras='{"front":{"type":"opencv","index_or_path":0,"width":640,"height":480,"fps":30}}' \
   --teleop.type=joycon \
   --teleop.use_example6=true \
-  --teleop.software_calibration="$REBOT_CALIBRATION" \
   --teleop.xyz_scale=0.6666666667 \
   --dataset.repo_id=local/rebot_pick \
   --dataset.root=./data/rebot_pick \
@@ -92,7 +89,7 @@ python -m lerobot.scripts.lerobot_train \
   --wandb.enable=false
 ```
 
-这里关闭预训练视觉权重下载，仅给出可从本地数据启动的配置；没有 GPU 时改 `--policy.device=cpu`。20,000 步只是起始配置，不是对训练收敛或任务成功率的承诺。复用数据训练不同策略时，按该策略的输入要求调整配置即可。部署时需继续指定相同 `--robot.software_calibration`，不要混用原始电机角数据与软件归零后的数据。
+这里关闭预训练视觉权重下载，仅给出可从本地数据启动的配置；没有 GPU 时改 `--policy.device=cpu`。20,000 步只是起始配置，不是对训练收敛或任务成功率的承诺。复用数据训练不同策略时，按该策略的输入要求调整配置即可。部署时保持与采集一致的机械零位；不要混用旧软件归零数据和新硬件零位数据。
 
 ## 离线验证及边界
 
@@ -125,17 +122,14 @@ PYTHONPATH=src uv run --no-project --python /tmp/rebot-lerobot-check/bin/python 
 2. 先不配置相机，用下列命令测试 60 秒真机遥操。开始前退出其他串口控制程序并连接右 Joy-Con。这个适配先回到 examples 的 Z=0.25 m 初始位姿，再按固定参考控制；ZR 切换夹爪，Ctrl+C 提前退出。
 
 ```bash
-REBOT_CALIBRATION="$(realpath ../../examples/calibration/rebot.json)"
 python -m lerobot.scripts.lerobot_teleoperate \
   --robot.type=rebot_b601_follower \
   --robot.port=/dev/ttyACM0 \
   --robot.motor_family=dm \
   --robot.control_backend=examples \
   --robot.id=rebot \
-  --robot.software_calibration="$REBOT_CALIBRATION" \
   --teleop.type=joycon \
   --teleop.use_example6=true \
-  --teleop.software_calibration="$REBOT_CALIBRATION" \
   --fps=30 --teleop_time_s=60
 ```
 

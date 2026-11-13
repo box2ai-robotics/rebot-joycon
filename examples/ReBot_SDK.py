@@ -1,9 +1,7 @@
 # code by Boxjod 2025.12.01 Box2AI-Robotics copyright 盒桥智能 版权所有
 
-from Motor_CAN import Motor, DM_Motor_Type, MotorControl, Control_Type
+from Motor_CAN import Motor, DM_Motor_Type, MotorControl, Control_Type, DM_variable
 import serial
-import json
-from pathlib import Path
 import copy
 import time
 import numpy as np
@@ -37,6 +35,7 @@ class ReBotArm:
     self._policy_arm_position = None
     self._policy_arm_velocity = np.zeros(6)
     self._policy_arm_time = None
+    self._home_time = None
     self.calibration_path = calibration_path
     self.driver_port = driver_port
     # 兼容旧示例的名称，实际配置统一为 reBot B601-DM。
@@ -113,14 +112,13 @@ class ReBotArm:
   def Connetct_ReBot(self):
     start_runtime_log()
     record_event("connect", port=self.driver_port, side=self.side,
-                 calibration=str(self.calibration.path),
+                 zero_reference="motor_flash",
                  offsets=self.calibration.offsets.tolist(), signs=self.calibration.signs.tolist(),
                  motor_ids=list(self.motorid_list), home=self.home_pose.tolist(),
                  limits=self.control_qlimit, kp=list(self.kp), kd=list(self.kd),
                  gripper_control="motor_position", software_torque_cap_nm=None)
     print("夹爪：电机端 MIT 位置闭环；原 3 N·m 软件力矩限幅不再适用")
-    print(f"使用校准文件：{self.calibration.path}")
-    print("六轴软件零偏(rad):", np.round(self.calibration.offsets[:6], 6).tolist())
+    print("使用电机 Flash 零位，无本地软件零偏")
     
     self.Motors =[]
     for idx in range(self.motors_len):
@@ -134,6 +132,26 @@ class ReBotArm:
     self.MotorController = MotorControl(serial_device)
     for idx in range(self.motors_len):
       self.MotorController.addMotor(self.Motors[idx])
+    try:
+      # 按驱动实际 MIT 量程匹配夹爪，避免把 4340 反馈按 4310 解码。
+      gripper = self.Motors[6]
+      limits = [self.MotorController.read_motor_param(gripper, rid)
+                for rid in (DM_variable.PMAX, DM_variable.VMAX, DM_variable.TMAX)]
+      candidates = (DM_Motor_Type.DM4310, DM_Motor_Type.DM4310_48V,
+                    DM_Motor_Type.DM4340, DM_Motor_Type.DM4340_48V)
+      detected = next((kind for kind in candidates
+                       if None not in limits and np.allclose(
+                           limits, self.MotorController.Limit_Param[kind])), None)
+      if detected is None:
+        raise RuntimeError(f"夹爪量程读取失败或不支持：{limits}，停止连接")
+      gripper.MotorType = detected
+      self.motor_type[6] = 0 if detected in candidates[2:] else 1
+      print(f"夹爪自动适配：{detected.name}，PMAX/VMAX/TMAX={limits}")
+      record_event("gripper_motor_detected", port=self.driver_port,
+                   motor_type=detected.name, limits=limits)
+    except Exception:
+      self.MotorController.serial_.close()
+      raise
     self.is_connected_flag = True
     
   def is_connected(self):
@@ -159,13 +177,7 @@ class ReBotArm:
     record_event("mode_confirmed", port=self.driver_port, mode=mode)
 
   def Arm_Zero_Setting(self):
-    # 3. 零位校准
-    for idx in range(self.motors_len):
-      self.MotorController.disable(self.Motors[idx])
-      print(f"校准零位{idx}，按回车确认")
-      input()
-      self.MotorController.set_zero_position(self.Motors[idx])
-      time.sleep(0.1)
+    raise RuntimeError("请使用 examples/0_calibrate_rebot.py 统一完成七路 Flash 标定")
 
   def update_motors_status(self, wait_timeout_s=GRIPPER_FEEDBACK_TIMEOUT_S):
     for motor in self.Motors:
@@ -196,7 +208,7 @@ class ReBotArm:
     # Copy after receiving: a late reply must also update the PD input.
     for idx in range(self.motors_len):
       direction = self.calibration.signs[idx]
-      self.motors_pose[idx] = (self.Motors[idx].getPosition() - self.calibration.offsets[idx]) * direction
+      self.motors_pose[idx] = self.Motors[idx].getPosition() * direction
       self.motors_speed[idx] = self.Motors[idx].getVelocity() * direction
       self.motors_torque[idx] = self.Motors[idx].getTorque() * direction
 
@@ -264,13 +276,30 @@ class ReBotArm:
       self._policy_arm_position = clipped
     self.target_pose[:6] = self._policy_arm_position.tolist()
 
-  def ReBot_Control(self, target_pose, kp = 0, *, smooth=False):
+  def ReBot_Control(self, target_pose, kp = 0, *, smooth=False, home_velocity=None):
     record_event("control_request", port=self.driver_port,
                  target=list(map(float, target_pose)), smooth=smooth)
+    previous_target = np.asarray(self.target_pose, dtype=float).copy()
     self.target_pose_input = target_pose
     for idx in range(7):
       self.target_pose[idx] = target_pose[idx]
     self.update_motors_status()
+    if home_velocity is not None:
+      now = time.monotonic()
+      speed = float(home_velocity)
+      measured = np.asarray(self.motors_pose, dtype=float)
+      goal = np.asarray(self.target_pose, dtype=float)
+      if not np.isfinite(speed) or speed <= 0 or not np.isfinite(measured).all() or not np.isfinite(goal).all():
+        self.ReBot_Disable()
+        raise ValueError("回中速度须为正有限数，位置反馈和目标须为有限数")
+      # 首包保持反馈；停顿不积累可跳跃的距离。保护修正后的上一目标用于下一步。
+      elapsed = 0.0 if self._home_time is None else now - self._home_time
+      origin = measured if self._home_time is None else previous_target
+      dt = float(np.clip(elapsed, 0.0, 0.02))
+      self.target_pose[:] = origin + np.clip(goal - origin, -speed * dt, speed * dt)
+      self._home_time = now
+    else:
+      self._home_time = None
     if smooth:
       self._smooth_policy_arm_target()
     else:
@@ -351,8 +380,7 @@ class ReBotArm:
                    feedback_torque=float(self.motors_torque[6]), elapsed_s=elapsed,
                    kp=float(kp), kd=float(kd),
                    feedforward_torque=torque, control=control)
-    motor_position = float(self.target_pose[idx] * self.calibration.signs[idx]
-                           + self.calibration.offsets[idx])
+    motor_position = float(self.target_pose[idx] * self.calibration.signs[idx])
     record_event("joint_command_attempt", port=self.driver_port, joint=idx + 1,
                  kp=float(kp), kd=float(kd),
                  motor_position=motor_position, velocity=0.0, feedforward_torque=torque)
@@ -361,9 +389,11 @@ class ReBotArm:
         kp=kp, kd=kd, q=motor_position, dq=0, tau=torque)
     record_event("joint_command_returned", port=self.driver_port, joint=idx + 1)
 
-  def Go_Home_Pose(self):
+  def Go_Home_Pose(self, *, max_velocity=None):
     record_event("home", port=self.driver_port)
-    self.ReBot_Control(self.home_pose, kp=np.asarray(self.kp) * self.home_kp_scale)
+    self.ReBot_Control(self.home_pose, kp=np.asarray(self.kp) * self.home_kp_scale,
+                       home_velocity=max_velocity)
+    return bool(np.allclose(self.target_pose, self.home_pose, atol=1e-6, rtol=0))
     
   def Go_Zero_Pose(self):
     record_event("zero", port=self.driver_port)
@@ -371,6 +401,7 @@ class ReBotArm:
      
   def ReBot_Disable(self):
     record_event("disable_begin", port=self.driver_port)
+    self._home_time = None
     self._policy_arm_time = None
     self._policy_arm_position = None
     self._policy_arm_velocity = np.zeros(6)

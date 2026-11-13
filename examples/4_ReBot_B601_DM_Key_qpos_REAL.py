@@ -7,6 +7,7 @@ if __name__ == "__main__":
 
 import os
 from pathlib import Path
+from rebot_port import select_port
 from importlib import import_module
 ReBotCalibration = import_module("0_calibrate_rebot").ReBotCalibration
 import mujoco
@@ -130,16 +131,7 @@ listener = keyboard.Listener(on_press=on_press, on_release=on_release)
 # Backup for target_gpos in case of invalid IK
 target_qpos_last = init_qpos.copy()
 
-# auto ckeck the ttyACM
-output1 = os.popen('udevadm info -a -n /dev/ttyACM0 | grep serial').read() if Path('/dev/ttyACM0').exists() else ''
-output2 = os.popen('udevadm info -a -n /dev/ttyACM1 | grep serial').read() if Path('/dev/ttyACM1').exists() else ''
-
-if "0000000" in output1:
-    arm_tty = "/dev/ttyACM0"
-elif "0000000" in output2:
-    arm_tty = "/dev/ttyACM1"
-else:
-    raise RuntimeError("找不到ReBot机械臂驱动器，请重新拔插检查电源后重试")
+arm_tty = select_port()
 
 # init ReBot Real Hardware
 rebot_right = None
@@ -158,6 +150,8 @@ try:
     
         start = time.monotonic()
         home_cycle = 0
+        home_done, home_limited = True, False
+        home_start = start
         last_step = start - CONTROL_PERIOD
         next_viewer = 0.0
         report_start = start
@@ -169,10 +163,12 @@ try:
             with lock:
                 if home_requested:
                     home_cycle = 0
+                    home_done, home_limited = False, True
+                    home_start = step_start
                     target_qpos = init_qpos.copy()
                     home_requested = False
                 home_cycle += 1
-                homing = home_cycle <= shared_control.STARTUP_HOME_CYCLES
+                homing = home_cycle <= shared_control.STARTUP_HOME_CYCLES or not home_done
                 for k, direction in ([] if homing else keys_pressed.items()):
                     joint_idx = (key_to_joint_increase[k] if k in key_to_joint_increase
                                  else key_to_joint_decrease[k])
@@ -180,8 +176,10 @@ try:
                     target_qpos[joint_idx] += increment * direction * dt / CONTROL_PERIOD
             target_qpos = np.clip(target_qpos, control_qlimit[0], control_qlimit[1])
 
-            if home_cycle < shared_control.STARTUP_HOME_CYCLES:
-                rebot_right.Go_Home_Pose()
+            if home_cycle < shared_control.STARTUP_HOME_CYCLES or not home_done:
+                if step_start - home_start > 30.0:
+                    raise TimeoutError("限速回中超时，停止控制并失能")
+                home_done = rebot_right.Go_Home_Pose(max_velocity=0.35 if home_limited else None)
                 target_qpos = np.asarray(rebot_right.target_pose, dtype=float).copy()
             elif not homing:
                 rebot_right.ReBot_Control(target_qpos)

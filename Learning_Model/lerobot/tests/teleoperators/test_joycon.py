@@ -1,5 +1,6 @@
 """Real example FK/IK and LeRobot contracts, fake HID/CAN; never moves hardware."""
 
+import json
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,7 +18,21 @@ from lerobot.teleoperators.joycon.teleop_joycon import validate_joycon_robot
 from lerobot.utils.errors import DeviceNotConnectedError
 from lerobot.utils.rebot_kinematics import load_rebot_kinematics
 
-CALIBRATION_PATH = Path(__file__).resolve().parents[4] / "examples/calibration/rebot.json"
+CALIBRATION_PATH = None
+
+
+@pytest.fixture(autouse=True)
+def legacy_calibration_files(tmp_path, monkeypatch):
+    """Legacy MotorBridge tests own their data; never depend on real arm files."""
+    limits = [(-150, 150), (-200, 1), (-200, 1), (-80, 90), (-90, 90), (-90, 90), (-270, 0)]
+    path = tmp_path / "legacy_rebot.json"
+    path.write_text(json.dumps({name: dict(id=i, drive_mode=0, homing_offset=0,
+                                         range_min=limit[0], range_max=limit[1])
+                                for i, (name, limit) in enumerate(zip(JOINT_NAMES, limits), 1)}))
+    path.with_suffix('.encoders.json').write_text(json.dumps({
+        name: dict(id=i, position_rad=0.) for i, name in enumerate(JOINT_NAMES, 1)}))
+    monkeypatch.setattr(sys.modules[__name__], "CALIBRATION_PATH", path)
+
 
 MODULE = "lerobot.teleoperators.joycon.teleop_joycon"
 ROBOT_MODULE = "lerobot.robots.rebot_b601_follower.rebot_b601_follower"
@@ -263,11 +278,11 @@ def test_bundled_model_matches_original_and_needs_no_external_code():
         assert bundled.rebot_FK(bundled.get_home_q(pure_model), robot=pure_model)[2] == pytest.approx(
             0.25, abs=1e-6
         )
-    original_path = CALIBRATION_PATH.parents[1] / "ReBot_Kinematics.py"
+    original_path = Path(__file__).resolve().parents[4] / "examples/ReBot_Kinematics.py"
     original = load_rebot_kinematics(original_path)
     calibration = bundled.ReBotCalibration(CALIBRATION_PATH)
     copied_model = bundled.create_rebot_b601_dm(calibration=calibration)
-    original_model = original.create_rebot_b601_dm(calibration=original.ReBotCalibration(CALIBRATION_PATH))
+    original_model = original.create_rebot_b601_dm(calibration=original.ReBotCalibration())
     for field in ("REBOT_DH", "REBOT_BASE_TRANSFORM", "REBOT_END_TRANSFORM", "REBOT_TCP_OFFSET"):
         np.testing.assert_array_equal(getattr(bundled, field), getattr(original, field))
     rng = np.random.default_rng(42)
@@ -397,35 +412,16 @@ def test_record_loop_consumes_joycon_buttons(connected, button, redo):
     assert events == {"exit_early": False, "rerecord_episode": redo}
 
 
-@pytest.mark.parametrize("fail", [False, True])
-def test_calibrated_connect_homes_and_cleans_up_on_failure(tmp_path, fail):
+def test_legacy_dm_connect_cannot_bypass_hardware_identity_check(tmp_path):
     config = RebotB601FollowerRobotConfig(
-        control_backend="motorbridge",
-        port="/dev/null",
-        software_calibration=CALIBRATION_PATH,
-        calibration_dir=tmp_path,
+        control_backend="motorbridge", port="/dev/null",
+        software_calibration=CALIBRATION_PATH, calibration_dir=tmp_path,
     )
-    with (
-        patch(f"{ROBOT_MODULE}.require_package"),
-        patch(f"{ROBOT_MODULE}.MotorBridgeController") as controller,
-        patch(f"{ROBOT_MODULE}.MotorBridgeMode"),
-    ):
+    with patch(f"{ROBOT_MODULE}.require_package"), patch(f"{ROBOT_MODULE}.MotorBridgeController") as factory:
         robot = RebotB601Follower(config)
-        bus = controller.from_dm_serial.return_value
-        with patch.object(
-            robot, "go_home", side_effect=TimeoutError("test timeout") if fail else None
-        ) as home:
-            if fail:
-                with pytest.raises(TimeoutError):
-                    robot.connect()
-                assert not robot.is_connected
-                bus.disable_all.assert_called()
-                bus.close.assert_called_once()
-            else:
-                robot.connect()
-                assert robot.is_connected
-                robot.disconnect()
-            home.assert_called_once()
+        with pytest.raises(ValueError, match="control_backend=examples"):
+            robot.connect()
+        factory.from_dm_serial.assert_not_called()
 
 
 def test_calibrated_config_roundtrip_keeps_example_defaults(tmp_path):

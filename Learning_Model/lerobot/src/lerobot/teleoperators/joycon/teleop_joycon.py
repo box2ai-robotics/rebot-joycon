@@ -230,12 +230,8 @@ def validate_joycon_robot(teleop: Teleoperator | None, robot: Any) -> None:
             raise ValueError("Example 6 Joy-Con requires robot.control_backend=examples")
         if example_directory(teleop.config.examples_path) != example_directory(robot.config.examples_path):
             raise ValueError("Robot and Joy-Con must share examples_path")
-        if (
-            teleop.config.software_calibration is None
-            or robot.config.software_calibration is None
-            or teleop.config.software_calibration.resolve() != robot.config.software_calibration.resolve()
-        ):
-            raise ValueError("Joy-Con and robot must use the same software_calibration JSON file")
+        if teleop.config.software_calibration is not None or robot.config.software_calibration is not None:
+            raise ValueError("Examples now use motor Flash zero; remove software_calibration")
         robot._defer_example_home = True
         return
     if robot.config.control_backend == "examples":

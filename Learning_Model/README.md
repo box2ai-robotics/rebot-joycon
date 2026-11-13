@@ -44,7 +44,7 @@ Uses simulated devices. Recorded validation results are in [RUNBOOK](../docs/RUN
 
 ## Teleoperation
 
-Connect the right Joy-Con and ensure serial/HID permissions and a graphical desktop are available. The serial port must be free. Calibration is shared with the root project: [rebot.json](../examples/calibration/rebot.json) and [rebot.encoders.json](../examples/calibration/rebot.encoders.json). See [calibration](../README.md#calibration) when recalibration is needed.
+Connect the right Joy-Con and ensure serial/HID permissions and a graphical desktop are available. The serial port must be free. DM defaults to the examples backend and motor Flash zero. No local calibration receipt or motor SN is required. See [calibration](../README.md#calibration) when recalibration is needed.
 
 **Teleoperation and recording immediately enable the arm, send a home target (TCP Z = 0.25 m, gripper closed), and open MuJoCo.** Adjust `/dev/ttyACM0` for your hardware.
 
@@ -55,10 +55,8 @@ Connect the right Joy-Con and ensure serial/HID permissions and a graphical desk
   --robot.motor_family=dm \
   --robot.control_backend=examples \
   --robot.id=rebot \
-  --robot.software_calibration=../../examples/calibration/rebot.json \
   --teleop.type=joycon \
   --teleop.use_example6=true \
-  --teleop.software_calibration=../../examples/calibration/rebot.json \
   --fps=30 \
   --teleop_time_s=60
 ```
@@ -76,10 +74,8 @@ The example records **10 episodes of up to 200 seconds**, with 5 seconds between
   --robot.motor_family=dm \
   --robot.control_backend=examples \
   --robot.id=rebot \
-  --robot.software_calibration=../../examples/calibration/rebot.json \
   --teleop.type=joycon \
   --teleop.use_example6=true \
-  --teleop.software_calibration=../../examples/calibration/rebot.json \
   --robot.cameras='{"front":{"type":"opencv","index_or_path":0,"width":640,"height":480,"fps":30,"fourcc":"MJPG"}}' \
   --dataset.repo_id=local/rebot_smoke \
   --dataset.root=./data/rebot_smoke \

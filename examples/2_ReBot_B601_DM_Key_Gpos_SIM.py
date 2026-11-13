@@ -97,6 +97,9 @@ key_to_joint_decrease = {
 # Dictionary to track currently pressed keys and their direction
 keys_pressed = {}
 
+homing = False
+HOME_MAX_VELOCITY = 0.35  # 七路按 0 回中目标速度 rad/s
+
 # Handle key press events
 def on_press(key):
     try:
@@ -108,14 +111,10 @@ def on_press(key):
             with lock:
                 keys_pressed[k] = -1  # Decrease direction
         elif k == "0":
-            # Reset to initial joint positions
-            print(f'{k=}')
             with lock:
-                global target_qpos, target_gpos, target_gpos_last
-                target_qpos = init_qpos.copy()
-                target_gpos = init_gpos.copy()
-                target_gpos_last = init_gpos.copy()
-        
+                global homing
+                homing = True
+
     except AttributeError:
         pass  # Handle special keys if necessary
 
@@ -153,12 +152,22 @@ try:
     
         next_print = 0.0
         start = time.monotonic()
+        last_home_tick = time.monotonic()
         while viewer.is_running() and time.monotonic() - start < 1000:
             step_start = time.monotonic()
 
+            now = time.monotonic()
+            home_step = HOME_MAX_VELOCITY * np.clip(now - last_home_tick, 0.0, 0.02)
+            last_home_tick = now
             # Update target_qpos based on the keys currently pressed
             with lock:
-                for k, direction in keys_pressed.items():
+                returning_home = homing
+                if homing:
+                    target_qpos += np.clip(init_qpos - target_qpos, -home_step, home_step)
+                    homing = not np.allclose(target_qpos, init_qpos, atol=1e-6, rtol=0)
+                    target_gpos = rebot_FK(target_qpos[:6], robot=robot)
+                    target_gpos_last = target_gpos.copy()
+                for k, direction in ([] if returning_home else keys_pressed.items()):
                     if k in key_to_joint_increase:
                         position_idx = key_to_joint_increase[k]
                         if position_idx == 6:  # for rad

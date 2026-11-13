@@ -31,14 +31,14 @@ class RebotB601FollowerConfig:
     # Serial device or native CAN channel.
     port: str
 
-    # Optional example calibration: six software offsets + gripper endpoints, no hardware zero writes.
+    # Legacy MotorBridge-only software calibration; examples require None.
     software_calibration: Path | None = None
     kinematics_path: Path | None = None
-    # auto: authoritative example SDK for software-calibrated DM, MotorBridge otherwise.
+    # auto: hardware-zero SDK for DM, MotorBridge for other motor families.
     control_backend: str = "auto"
     examples_path: Path | None = None
 
-    # Applies only when software_calibration is supplied (examples coordinate frame).
+    # Examples use SDK home; MotorBridge uses home only with software_calibration.
     home_on_connect: bool = True
     home_kp_scale: float = 0.8
     home_tolerance_rad: float = 0.1
@@ -91,12 +91,14 @@ class RebotB601FollowerConfig:
         self.motor_family = MotorFamily(self.motor_family)
         self.control_mode = ArmControlMode(self.control_mode)
         if self.control_backend == "auto":
-            self.control_backend = "examples" if self.software_calibration is not None else "motorbridge"
+            self.control_backend = "examples" if self.motor_family is MotorFamily.DM else "motorbridge"
         if self.control_backend not in ("examples", "motorbridge"):
             raise ValueError("control_backend must be auto, examples or motorbridge")
         if self.control_backend == "examples":
-            if self.software_calibration is None or self.motor_family is not MotorFamily.DM:
-                raise ValueError("Example 6 requires DM and software_calibration")
+            if self.software_calibration is not None:
+                raise ValueError("Examples now use motor Flash zero; remove software_calibration")
+            if self.motor_family is not MotorFamily.DM:
+                raise ValueError("Example 6 requires DM")
             if self.max_relative_target is not None or self.kinematics_path is not None:
                 raise ValueError(
                     "Example 6 uses its own model/limits; remove max_relative_target/kinematics_path"

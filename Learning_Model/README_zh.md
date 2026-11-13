@@ -44,7 +44,7 @@ uv pip install --python ../../.venv/bin/python -e ../../joycon-robotics
 
 ## 真机遥操
 
-先连接右 Joy-Con，确保有串口/HID 权限和图形桌面，串口未被占用。共用根目录的 [rebot.json](../examples/calibration/rebot.json) 和 [rebot.encoders.json](../examples/calibration/rebot.encoders.json)；重新校准见[校准说明](../README_zh.md#零位校准与使用)。
+先连接右 Joy-Con，确保有串口/HID 权限和图形桌面，串口未被占用。DM 默认使用 examples 后端及电机 Flash 零位，不要求本地完成记录或 SN 检查（无软件零偏）；重新校准见[校准说明](../README_zh.md#零位校准与使用)。
 
 **遥操和采集启动即使能、发送回中目标（TCP Z=0.25 m、夹爪闭合），并打开 MuJoCo。** 按实际设备修改 `/dev/ttyACM0`。
 
@@ -55,10 +55,8 @@ uv pip install --python ../../.venv/bin/python -e ../../joycon-robotics
   --robot.motor_family=dm \
   --robot.control_backend=examples \
   --robot.id=rebot \
-  --robot.software_calibration=../../examples/calibration/rebot.json \
   --teleop.type=joycon \
   --teleop.use_example6=true \
-  --teleop.software_calibration=../../examples/calibration/rebot.json \
   --fps=30 \
   --teleop_time_s=60
 ```
@@ -76,10 +74,8 @@ uv pip install --python ../../.venv/bin/python -e ../../joycon-robotics
   --robot.motor_family=dm \
   --robot.control_backend=examples \
   --robot.id=rebot \
-  --robot.software_calibration=../../examples/calibration/rebot.json \
   --teleop.type=joycon \
   --teleop.use_example6=true \
-  --teleop.software_calibration=../../examples/calibration/rebot.json \
   --robot.cameras='{"front":{"type":"opencv","index_or_path":0,"width":640,"height":480,"fps":30,"fourcc":"MJPG"}}' \
   --dataset.repo_id=local/rebot_smoke \
   --dataset.root=./data/rebot_smoke \

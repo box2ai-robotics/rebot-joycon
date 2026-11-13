@@ -1,10 +1,12 @@
-﻿# Rebot-Joycon
+# Rebot-Joycon
 
 [English](README.md) | [简体中文](README_zh.md) · [MIT License](LICENSE)
 
 A codebase for controlling robots with Joy-Cons to collect data for embodied AI.
 
 Supports keyboard and right Joy-Con control of the **reBot B601-DM**, in MuJoCo and on hardware. For data collection, ACT training, and inference, see [Learning_Model](Learning_Model/README.md).
+
+This update adds automatic gripper motor detection, slower homing, and calibration that saves zero positions to motor Flash.
 
 ## Installation
 
@@ -30,15 +32,13 @@ Skip cloning if the directory already exists. For drivers, Bluetooth pairing, an
 
 ## Calibration
 
-To recalibrate, place the arm at mechanical zero with the gripper fully closed:
+Place the arm at the mechanical zero pose shown below with the gripper fully closed; calibration writes all seven motor zero positions to Flash so they persist after power-off.
 
 <img src="docs/images/b601dm_zeroposition.jpg" alt="Mechanical zero pose, gripper closed" width="50%">
 
 ```bash
 .venv/bin/python examples/0_calibrate_rebot.py --port /dev/ttyACM0
 ```
-
-This reads feedback without enabling motors or commanding motion. Keep both files in [examples/calibration](examples/calibration): `rebot.json` and `rebot.encoders.json`. They are shared with LeRobot and must match your arm.
 
 ## Run
 
@@ -89,7 +89,7 @@ Press `ZR` to toggle the gripper with one-second full-travel target interpolatio
 
 ### Real hardware examples
 
-Before running, check that the files in [Calibration](#calibration) match your arm. **Examples 4–6 immediately enable the arm and send a home target (TCP Z = 0.25 m, gripper closed).** They detect `/dev/ttyACM0` or `/dev/ttyACM1` using serial string `0000000`; serial access is required.
+Before running, complete hardware zeroing and power-cycle verification in [Calibration](#calibration). **After motor range and feedback checks, examples 4–6 enable the arm and send a home target (TCP Z = 0.25 m, gripper closed).** They select the sole `/dev/ttyACM*` or `/dev/ttyUSB*` device. With multiple devices, set `REBOT_PORT=/dev/ttyACM0`. Serial access is required.
 
 #### 4. Keyboard joint control (qpos)
 
@@ -121,7 +121,7 @@ Closing the window normally returns the real arm home before disabling it. `Ctrl
 
 | Path | Purpose |
 | --- | --- |
-| `examples/` | Examples 0–6, shared SDK, kinematics, motor communication, protection, and tests. |
+| `examples/` | Examples 0–6, shared SDK, kinematics, motor communication, and protection. |
 | `URDF/` | Robot models, meshes, and validation records. |
 | `joycon-robotics/` | Optional external Joy-Con dependency; ignored by Git. |
 | `Learning_Model/` | Adapted LeRobot, data collection, ACT training, and inference. |
@@ -134,7 +134,5 @@ Closing the window normally returns the real arm home before disabling it. `Ctrl
 ## Logs and protection
 
 Examples 0–6 and SDK hardware connections retain console and event logs in `logs/`. Real-arm gripper protection retracts the target and latches the blocked direction when absolute feedback torque exceeds 1 N·m; reverse movement is allowed. This is not a hard motor torque limit. Simulation has no motor torque feedback.
-
-Offline checks: `.venv/bin/python -m unittest discover -s examples -p 'test_*.py' -q`.
 
 Third-party code and models retain their own licenses. `Learning_Model/lerobot` is included as ordinary source files with local reBot/Joy-Con adaptations, based on [LeRobot commit 53feaef](https://github.com/huggingface/lerobot/commit/53feaef37b67e8f4c23b6953e880ff535e39d6fe). An unmodified upstream clone is not a replacement.
