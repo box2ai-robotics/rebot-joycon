@@ -28,7 +28,7 @@ CONTROL_PERIOD_S = 0.001
 STARTUP_HOME_CYCLES = 40
 EXIT_HOME_CYCLES = 100
 SIMULATION_STEPS = 2
-GRIPPER_TRAVEL_TIME_S = 1.0  # Full calibrated stroke; shared by standalone and LeRobot.
+GRIPPER_TRAVEL_TIME_S = 1.0  # 4310 保留原一秒全行程插补
 CONTROL_GLIMIT = [[0.000, -0.450, 0.00, -3.1, -3.1, -3.1],
                   [0.450, 0.450, 0.680, 3.1, 3.1, 3.1]]
 DOF_SPEED = [2 / 3, 2 / 3, 2 / 3, 1, 1, 1]
@@ -57,7 +57,7 @@ class Example6Controller:
         self.mjdata.qpos[self.finger_indices] = 0.0
         self.mjdata.ctrl[:] = np.r_[self.init_qpos[:6], 0.0]
         mujoco.mj_forward(self.mjmodel, self.mjdata)
-        # Joy-Con reports calibrated open/close angles; the controller interpolates them.
+        # SDK 决定型号策略：4310 沿用手柄插补，4340 由 SDK 插补。
         self.joycon = JoyconRobotics(
             device="right", glimit=[row.copy() for row in CONTROL_GLIMIT],
             dof_speed=DOF_SPEED.copy(), offset_position_m=self.init_gpos[:3],
@@ -104,8 +104,11 @@ class Example6Controller:
         if target_gpos.shape != (6,) or not np.isfinite(target_gpos).all() or not np.isfinite(gripper):
             raise ValueError("Non-finite or invalid Joy-Con target")
         gripper = np.clip(gripper, *self.control_qlimit[:, 6])
-        speed = abs(self.calibration.gripper_open - self.calibration.gripper_close) / GRIPPER_TRAVEL_TIME_S
-        self.target_qpos[6] = self.last_sent[6] + np.clip(gripper - self.last_sent[6], -speed * dt, speed * dt)
+        if self.arm.gripper_max_velocity_rad_s is None:
+            speed = abs(self.calibration.gripper_open - self.calibration.gripper_close) / GRIPPER_TRAVEL_TIME_S
+            self.target_qpos[6] = self.last_sent[6] + np.clip(gripper - self.last_sent[6], -speed * dt, speed * dt)
+        else:
+            self.target_qpos[6] = gripper  # 4340 完整开闭目标交给 SDK 插补
         target_gpos[3:5] *= -1
         fd_qpos = np.clip(self.mjdata.qpos[self.qpos_indices], self.robot.qlim[0], self.robot.qlim[1])
         q, success = rebot_IK(fd_qpos, target_gpos, robot=self.robot)
@@ -123,7 +126,7 @@ class Example6Controller:
             self.arm.ReBot_Control(self.target_qpos)
             self.last_sent = np.asarray(self.arm.target_pose).copy()
         for _ in range(SIMULATION_STEPS):
-            self._simulate(self.target_qpos, viewer)
+            self._simulate(self.last_sent, viewer)  # 预览 SDK 限速/保护后的实际目标
         self.target_qpos_last = self.target_qpos.copy()
         return self.last_sent.copy(), self.button
 

@@ -109,7 +109,7 @@ Use IK to translate and rotate the real end effector with a MuJoCo display. Keys
 
 #### 6. Right Joy-Con end-effector control
 
-Use a paired right Joy-Con to control the real end-effector position and orientation with a MuJoCo display. As in [example 3](#3-right-joy-con-end-effector-control), `joycon-robotics` is required; `ZR` toggles the gripper with one-second full-travel target interpolation.
+Use a paired right Joy-Con to control the real end-effector position and orientation with a MuJoCo display. As in [example 3](#3-right-joy-con-end-effector-control), `joycon-robotics` is required; `ZR` toggles the gripper, with the original one-second interpolation for 4310 and SDK interpolation at 2 rad/s for 4340; the preview shows the targets actually sent.
 
 ```bash
 .venv/bin/python examples/6_ReBot_B601_DM_Joycon_Gpos_REAL.py

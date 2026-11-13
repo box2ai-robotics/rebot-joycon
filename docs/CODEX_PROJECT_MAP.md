@@ -12,8 +12,9 @@
 | 硬件零点及断电保存 | `examples/0_calibrate_rebot.py`：默认硬件置零（`--hardware-zero` 可省略）、`--verify-hardware-zero`；`Motor_CAN.save_motor_param` | 历史模拟串口回归；[协议依据与边界](research/hardware_zero.md)；断电实测待用户核验 |
 | 第 7 路 4310/4340 自动适配 | `examples/ReBot_SDK.py`：`Connetct_ReBot`；`Motor_CAN.py`：`read_motor_param` | 历史离线回归：四种量程、正负力矩、缺失/异常参数、延迟回复与旧缓存；仅 SDK 后端 |
 | 全部实机夹爪反馈超过 1 N·m 收回目标 | `examples/gripper_protection.py`：`GripperTorqueProtection.apply`、`GRIPPER_TORQUE_TRIP_NM`；SDK `_protect_gripper_target`；LeRobot follower `_send_gripper` | 历史离线回归：正负超限、锁存、反向卸力、键盘无目标积累；LeRobot follower/example6 测试：多模式、双臂隔离、修正动作返回与插补 |
-| 仿真 Joy-Con 夹爪开合 | `examples/3_ReBot_B601_DM_Joycon_Gpos_SIM.py`：`GRIPPER_TRAVEL_TIME_S`、`gripper_dt`、`target_qpos_last` | 3/6 号均恢复一秒目标插补；IK 失败回退行为不同，见 [RUNBOOK](RUNBOOK.md) |
-| 真机 Joy-Con 位置插补与 IK 失败独立控制 | `examples/6_ReBot_B601_DM_Joycon_Gpos_REAL.py`：`GRIPPER_TRAVEL_TIME_S`、`Example6Controller.step`、`last_sent` | LeRobot `test_rebot_example6.py`：双向插补、换向、限位与长停顿、失败 IK 下六轴保持、SDK 位置增益一致性 |
+| 仿真 Joy-Con 夹爪开合 | `examples/3_ReBot_B601_DM_Joycon_Gpos_SIM.py`：`GRIPPER_TRAVEL_TIME_S`、`gripper_dt`、`target_qpos_last` | 3 号保留一秒目标插补；6 号 4310 保留原插补、4340 由 SDK 插补；IK 失败回退行为不同，见 [RUNBOOK](RUNBOOK.md) |
+| 真机 Joy-Con 位置插补与 IK 失败独立控制 | `examples/6_ReBot_B601_DM_Joycon_Gpos_REAL.py`：`Example6Controller.step`、`last_sent`；SDK `GRIPPER_MAX_VELOCITY_RAD_S` | LeRobot `test_rebot_example6.py`：双向插补、换向、限位与长停顿、失败 IK 下六轴保持、SDK 位置增益一致性 |
+| 手柄夹爪张不开 / 6 号预览张开后回退 | SDK `_send_joint_command`、`gripper_max_velocity_rad_s`；6 号 `last_sent` | 四型号离线联调通过：4310 原插补、4340 2 rad/s、完整行程、保护与预览一致性；不恢复发布目录测试文件；实机开口待验证 |
 | 按 0 回零限速 | 1/2 `homing`；4/5 `home_done`；SDK `Go_Home_Pose(max_velocity=...)` | 历史离线回归：仿真连续目标、七路限速、长停顿、保护、回中未完成与超时清理；0.35 rad/s 目标插补，3/6 无 0 键 |
 | 4/5 号启动与回中 | `examples/4_ReBot_B601_DM_Key_qpos_REAL.py`、`5_ReBot_B601_DM_Key_Gpos_REAL.py`：`home_cycle`；6 号 `STARTUP_HOME_CYCLES` | 历史离线回归：4 号启动保留固定轮数；4 号按 0、5 号全部回中等待限速目标完成，30 秒超时失能 |
 | 真机示例退出回中 | `examples/4_ReBot_B601_DM_Key_qpos_REAL.py`：最外层 `finally` | 正常结束 100 次回中，异常直接失能；6 号正常/中断/异常回归见 [RUNBOOK](RUNBOOK.md) |

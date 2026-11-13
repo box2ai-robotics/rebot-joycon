@@ -107,7 +107,7 @@ git clone https://github.com/box2ai-robotics/joycon-robotics.git joycon-robotics
 
 #### 6. 右 Joy-Con 末端位姿控制
 
-使用已配对的右 Joy-Con 控制真机末端位置与姿态，并在 MuJoCo 中显示。与 [3 号仿真](#3-右-joy-con-末端位姿控制)一样，需安装 `joycon-robotics`；`ZR` 切换夹爪开合，目标按一秒全行程插补。
+使用已配对的右 Joy-Con 控制真机末端位置与姿态，并在 MuJoCo 中显示。与 [3 号仿真](#3-右-joy-con-末端位姿控制)一样，需安装 `joycon-robotics`；`ZR` 切换夹爪开合，4310 沿用一秒全行程插补，4340 由 SDK 按 2 rad/s 插补，窗口显示实际下发目标。
 
 ```bash
 .venv/bin/python examples/6_ReBot_B601_DM_Joycon_Gpos_REAL.py

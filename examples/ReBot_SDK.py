@@ -23,6 +23,7 @@ POLICY_ARM_RESTART_GAP_S = 0.2
 # These are motor gains, NOT a host torque controller or a 3 Nm torque cap.
 GRIPPER_KP = 2.0
 GRIPPER_KD = 1.0
+GRIPPER_MAX_VELOCITY_RAD_S = 2.0  # 仅 4340 系列 SDK 夹爪目标速度，4310 保留原行为
 GRIPPER_FEEDBACK_TIMEOUT_S = 0.2
 GRIPPER_STARTUP_FEEDBACK_WAIT_S = 1.0
 
@@ -31,6 +32,8 @@ class ReBotArm:
     if if_connect_directly:
       start_runtime_log()
     self._last_gripper_command_time = None
+    self._last_gripper_target = None
+    self.gripper_max_velocity_rad_s = None  # 连接识别为 4340 后启用
     self._gripper_protection = GripperTorqueProtection(record_event, driver_port)
     self._policy_arm_position = None
     self._policy_arm_velocity = np.zeros(6)
@@ -144,6 +147,8 @@ class ReBotArm:
                            limits, self.MotorController.Limit_Param[kind])), None)
       if detected is None:
         raise RuntimeError(f"夹爪量程读取失败或不支持：{limits}，停止连接")
+      self.gripper_max_velocity_rad_s = (GRIPPER_MAX_VELOCITY_RAD_S
+                                         if detected in candidates[2:] else None)
       gripper.MotorType = detected
       self.motor_type[6] = 0 if detected in candidates[2:] else 1
       print(f"夹爪自动适配：{detected.name}，PMAX/VMAX/TMAX={limits}")
@@ -369,12 +374,22 @@ class ReBotArm:
       if not np.isfinite(values).all():
         self.ReBot_Disable()
         raise ValueError("夹爪状态/增益必须为有限数值")
-      self._protect_gripper_target()
       now = time.monotonic()
       elapsed = (None if self._last_gripper_command_time is None
                  else now - self._last_gripper_command_time)
+      # 从反馈起步，之后沿保护修正后的目标推进；停顿不积累跳跃距离。
+      requested_target = float(self.target_pose[6])
+      if self.gripper_max_velocity_rad_s is not None:
+        origin = (float(self.motors_pose[6]) if self._last_gripper_target is None
+                  else self._last_gripper_target)
+        dt = 0.0 if elapsed is None else float(np.clip(elapsed, 0.0, 0.02))
+        step = self.gripper_max_velocity_rad_s * dt
+        self.target_pose[6] = origin + np.clip(requested_target - origin, -step, step)
+      self._protect_gripper_target()
+      self._last_gripper_target = float(self.target_pose[6])
       self._last_gripper_command_time = now
       record_event("gripper_command_attempt", port=self.driver_port,
+                   requested_target=requested_target, max_velocity_rad_s=self.gripper_max_velocity_rad_s,
                    target=float(self.target_pose[6]), position=float(self.motors_pose[6]),
                    velocity=float(self.motors_speed[6]),
                    feedback_torque=float(self.motors_torque[6]), elapsed_s=elapsed,
@@ -406,6 +421,7 @@ class ReBotArm:
     self._policy_arm_position = None
     self._policy_arm_velocity = np.zeros(6)
     self._last_gripper_command_time = None
+    self._last_gripper_target = None
     for idx in range(self.motors_len):
       self.MotorController.disable(self.Motors[idx])
     record_event("disable_complete", port=self.driver_port)
